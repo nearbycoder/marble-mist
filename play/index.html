@@ -1,0 +1,3823 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Marble Mist</title>
+<meta name="description" content="Race ten marbles down floating obstacle courses, right in your browser.">
+<link rel="icon" href="../assets/icon.svg">
+<style>
+  :root { --ink: #e4e9f2; --dim: rgba(228, 233, 242, .62); --glass: rgba(10, 14, 24, .66);
+    --line: rgba(170, 190, 230, .18); --accent: #ffb347; --accent2: #9db8ff; --warm: #ffb070; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #070910; color: var(--ink);
+    font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; cursor: grab; }
+  canvas#c.drag { cursor: grabbing; }
+  .glass { background: var(--glass); border: 1px solid var(--line); border-radius: 12px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .tag { position: absolute; left: 0; top: 0; padding: 2px 7px 2px 6px; border-radius: 999px; white-space: nowrap;
+    font-size: 11px; font-weight: 600; letter-spacing: .02em; background: rgba(8, 12, 20, .55);
+    display: flex; align-items: center; gap: 5px; will-change: transform, opacity; }
+  .tag i { width: 7px; height: 7px; border-radius: 50%; display: block; }
+  .tag.you { background: rgba(255, 255, 255, .9); color: #0a0f18; }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #hudTL { position: absolute; left: 16px; top: 16px; padding: 10px 14px 12px; min-width: 156px; }
+  .pos { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .pos sup { font-size: 16px; margin-left: 1px; vertical-align: 18px; }
+  .pos .of { font-size: 15px; font-weight: 500; color: var(--dim); margin-left: 6px; }
+  .kv { display: flex; justify-content: space-between; gap: 16px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .kv span { color: var(--dim); }
+  .bar { margin-top: 9px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffd27a, #ff8a3d); border-radius: 3px; }
+  #standings { position: absolute; left: 16px; top: 160px; margin: 0; padding: 6px 0; width: 184px; list-style: none; }
+  #standings li { display: grid; grid-template-columns: 20px 10px 1fr auto; align-items: center; gap: 6px;
+    padding: 2px 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #standings li i { width: 8px; height: 8px; border-radius: 50%; display: block; }
+  #standings li .n { color: var(--dim); text-align: right; }
+  #standings li .g { color: var(--dim); font-size: 11px; }
+  #standings li.me { background: rgba(255, 255, 255, .1); font-weight: 650; }
+  #standings li.out { opacity: .5; }
+  #minimap { position: absolute; right: 16px; top: 16px; width: 176px; height: 176px; }
+
+  #banner { position: fixed; left: 50%; top: 36%; transform: translate(-50%, -50%); pointer-events: none;
+    font-size: 72px; font-weight: 800; letter-spacing: .04em; text-shadow: 0 4px 30px rgba(0, 0, 0, .6);
+    opacity: 0; transition: opacity .25s; white-space: nowrap; }
+  #banner.small { font-size: 32px; letter-spacing: .08em; }
+  #banner.show { opacity: 1; }
+  #banner.warn { color: #ff9a7a; }
+
+  .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; box-sizing: border-box;
+    background: radial-gradient(ellipse at center, rgba(4, 6, 12, .2), rgba(4, 6, 12, .55)); overflow: auto; }
+  .card { width: min(600px, 100%); padding: 22px 22px 18px; box-sizing: border-box; }
+  #menu .card { width: min(780px, 100%); }
+  .card h1 { margin: 0; font-size: 34px; letter-spacing: .14em; font-weight: 800; }
+  .card h1 span { color: var(--accent); }
+  .card .sub { margin: 4px 0 18px; color: var(--dim); }
+  .card h2 { margin: 0 0 12px; font-size: 22px; letter-spacing: .06em; }
+  .tracks { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 8px;
+    max-height: min(42vh, 380px); overflow-y: auto; padding: 2px 4px 2px 0; }
+  .trk { text-align: left; padding: 6px 7px 7px; border-radius: 10px; background: rgba(150, 170, 215, .07);
+    border: 1px solid var(--line); display: grid; gap: 3px; align-content: start; }
+  .trk:hover { background: rgba(150, 170, 215, .13); }
+  .trk[aria-pressed="true"] { border-color: var(--accent); background: rgba(255, 180, 80, .1); }
+  .trk canvas { width: 100%; aspect-ratio: 2 / 1; height: auto; display: block; }
+  .bar2 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; flex-wrap: wrap; }
+  .bar2 .count { color: var(--dim); font-size: 12px; }
+  #courseInfo { margin: 12px 0 0; min-height: 34px; color: var(--dim); font-size: 12px; }
+  #courseInfo b { color: var(--ink); font-size: 14px; margin-right: 6px; }
+  #courseInfo .dots { color: var(--accent); letter-spacing: 2px; margin-right: 6px; }
+  .trk .ttl { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .trk b { font-size: 13px; }
+  .trk .dots { letter-spacing: 2px; color: var(--accent); font-size: 11px; white-space: nowrap; }
+  .trk .dots s, #courseInfo .dots s { color: rgba(255, 255, 255, .2); text-decoration: none; }
+  .trk small { color: var(--dim); font-size: 11px; line-height: 1.3; }
+  .row2 { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button { background: none; border: 0; padding: 7px 13px; }
+  .seg button[aria-pressed="true"] { background: rgba(255, 180, 80, .22); }
+  .seg-label { color: var(--dim); margin-right: 8px; }
+  .go { background: linear-gradient(180deg, #ffd27a, #ff9d3d); color: #1a0f02; border: 0; border-radius: 10px;
+    padding: 10px 26px; font-weight: 750; letter-spacing: .08em; font-size: 14px; }
+  .go:hover { filter: brightness(1.08); }
+  .ghost { background: rgba(150, 170, 215, .12); border: 1px solid var(--line); border-radius: 10px; padding: 9px 18px; }
+  .help { margin-top: 14px; color: var(--dim); font-size: 12px; }
+  kbd { font: inherit; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; background: rgba(255, 255, 255, .05); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td { padding: 4px 6px; border-bottom: 1px solid rgba(160, 180, 220, .08); }
+  td:first-child { width: 26px; color: var(--dim); }
+  td:last-child { text-align: right; color: var(--dim); }
+  td.f { text-align: right; color: var(--dim); width: 70px; font-size: 12px; }
+  tr.me td { color: var(--ink); font-weight: 700; background: rgba(255, 255, 255, .06); }
+  td i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: -1px; }
+  .btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .segs { display: flex; gap: 10px 18px; flex-wrap: wrap; align-items: center; }
+  .coins { font-weight: 750; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .oddsWrap { max-height: min(46vh, 420px); overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+  #oddsTable tr { cursor: pointer; }
+  #oddsTable tr:hover td { background: rgba(255, 255, 255, .05); }
+  #oddsTable tr.pick td { background: rgba(255, 180, 80, .18); color: var(--ink); }
+  #oddsTable td.form { width: 70px; }
+  #oddsTable td.form span { display: block; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #8fd3ff, #ffd27a); }
+  #oddsTable td.o { width: 64px; text-align: right; color: var(--ink); font-weight: 650; }
+  #oddsTable th { font-weight: 500; color: var(--dim); font-size: 11px; text-align: left; padding: 0 6px 4px; }
+  #oddsTable th:last-child { text-align: right; }
+  .go:disabled { filter: grayscale(1) brightness(.7); cursor: default; }
+  .seg button:disabled { opacity: .35; cursor: default; }
+  #standings.clickable { pointer-events: auto; }
+  #standings.clickable li { cursor: pointer; }
+  #standings li.watch { box-shadow: inset 3px 0 0 var(--accent); }
+  #betNote { margin: 10px 0 0; color: var(--dim); font-size: 12px; min-height: 16px; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #oddsTable tr:focus { outline: none; }
+  #oddsTable tr:focus-visible, body.pad-nav #oddsTable tr:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+  body.pad-nav .overlay button:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- settings ---- */
+  #settings .card { width: min(600px, 100%); }
+  .tabs { margin-bottom: 14px; }
+  .tabs button { padding: 7px 16px; }
+  .setBody { max-height: min(56vh, 520px); overflow-y: auto; padding-right: 6px; margin-right: -6px; }
+  .set { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 16px; padding: 9px 0;
+    border-bottom: 1px solid rgba(160, 180, 220, .08); }
+  .set > span:first-child small { display: block; color: var(--dim); font-size: 11px; margin-top: 1px; }
+  .set .seg button { padding: 6px 11px; font-size: 12px; }
+  .set .rng { display: flex; align-items: center; gap: 10px; }
+  .set input[type="range"] { width: 170px; margin: 0; accent-color: var(--accent); }
+  .set output { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); font-size: 12px; }
+  .setHead { margin: 16px 0 2px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  .setNote { color: var(--dim); font-size: 12px; margin: 10px 0 0; }
+  .keys { width: 100%; font-size: 12px; }
+  .keys td { padding: 6px 4px; color: var(--ink); }
+  .keys td:first-child { width: auto; color: var(--dim); }
+  .keys td:last-child { text-align: left; color: var(--ink); }
+  .keys th { text-align: left; font-weight: 600; font-size: 11px; color: var(--dim); padding: 0 4px 6px; }
+  .menuBtns { display: flex; gap: 10px; align-items: center; }
+  input[type="range"]:focus-visible, body.pad-nav input[type="range"]:focus { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+  #stats { position: fixed; right: 16px; bottom: 16px; font-size: 11px; opacity: .4; font-variant-numeric: tabular-nums; pointer-events: none; }
+  #hint { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px;
+    background: rgba(8, 12, 20, .55); font-size: 12px; color: var(--dim); pointer-events: none; white-space: nowrap; transition: opacity 1s; }
+  #status { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none;
+    font-size: 14px; letter-spacing: .04em; opacity: .75; transition: opacity .6s; }
+  #status.gone { opacity: 0; }
+  #status.err { color: #ffb4a0; opacity: 1; }
+
+  @media (max-width: 640px) {
+    #standings { display: none; }
+    #minimap { width: 120px; height: 120px; right: 12px; top: 12px; }
+    #hudTL { left: 12px; top: 12px; padding: 8px 11px 10px; min-width: 120px; }
+    .pos { font-size: 30px; }
+    .tracks { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); max-height: 34vh; }
+    .card h1 { font-size: 26px; }
+    #hint { display: none; }
+    .set { grid-template-columns: 1fr; }
+    .set input[type="range"] { width: 100%; }
+    .set .rng { width: 100%; }
+    #banner { font-size: 52px; }
+    #banner.small { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+
+<div id="hud" hidden>
+  <div id="hudTL" class="glass">
+    <div class="pos"><span id="hPos">–</span><sup id="hSuf"></sup><span class="of">/ 11</span></div>
+    <div class="kv"><span>Time</span><b id="hTime">0:00.0</b></div>
+    <div class="kv"><span>Falls</span><b id="hFalls">0</b></div>
+    <div class="kv" id="hBetRow" hidden><span>Bet</span><b id="hBet"></b></div>
+    <div class="bar"><i id="hBar"></i></div>
+  </div>
+  <ol id="standings" class="glass"></ol>
+  <canvas id="minimap" class="glass"></canvas>
+</div>
+<div id="banner"></div>
+<div id="hint">Drag to roll · <b>WASD</b> / arrows · scroll to zoom · <b>Esc</b> to pause</div>
+
+<div id="menu" class="overlay">
+  <div class="card glass">
+    <h1>MARBLE <span>MIST</span></h1>
+    <p class="sub">Race ten marbles down floating obstacle courses. Ramps, drops, bumpers, spinners and stompers, and nothing but air past the edges.</p>
+    <div class="bar2"><span class="seg" id="lvlSeg"><button data-l="0" aria-pressed="true">All</button><button data-l="1" title="Easy">●</button><button data-l="2">●●</button><button data-l="3">●●●</button><button data-l="4" title="Hard">●●●●</button></span><span class="count" id="courseCount"></span></div>
+    <div class="tracks" id="trackList"></div>
+    <p id="courseInfo"></p>
+    <div class="row2">
+      <div class="segs">
+        <div><span class="seg-label">Mode</span><span class="seg" id="modeSeg"><button data-m="race" aria-pressed="true">Race</button><button data-m="bet">Bet</button></span></div>
+        <div id="rivalsBox"><span class="seg-label">Rivals</span><span class="seg" id="diffSeg">
+          <button data-d="0">Easy</button><button data-d="1" aria-pressed="true">Normal</button><button data-d="2">Hard</button></span></div>
+        <div id="walletBox" hidden><span class="seg-label">Coins</span><span class="coins" id="walletMenu"></span></div>
+      </div>
+      <div class="menuBtns"><button class="ghost" id="setBtn">Settings</button><button class="go" id="raceBtn">RACE</button></div>
+    </div>
+    <div class="help" id="helpRace">Drag away from your marble to roll that way (further = faster), or use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows (screen directions). Roll off an edge and you lose time respawning at the last checkpoint; drop too far and your marble shatters. Yours is the chrome one.</div>
+    <div class="help" id="helpBet" hidden>Bet mode: you don't steer. Pick a marble, bet on it to win or to finish in the top three, and watch. Better marbles pay less. Coins are kept in this browser.</div>
+    <div class="help">Controllers work too: left stick rolls, right stick zooms, A selects, B goes back, Start pauses.</div>
+  </div>
+</div>
+
+<div id="betPanel" class="overlay" hidden>
+  <div class="card glass" style="width:min(500px,100%)">
+    <h2>Place your bet</h2>
+    <p class="sub" id="betSub"></p>
+    <div class="bar2"><span class="seg" id="betTypeSeg"><button data-t="win" aria-pressed="true">To win</button><button data-t="podium">Top three</button></span>
+      <span class="count">Coins <span class="coins" id="walletBet"></span></span></div>
+    <div class="oddsWrap"><table id="oddsTable"></table></div>
+    <div class="bar2" style="margin-top:12px"><span><span class="seg-label">Stake</span><span class="seg" id="stakeSeg">
+      <button data-s="10">10</button><button data-s="25" aria-pressed="true">25</button><button data-s="50">50</button><button data-s="100">100</button><button data-s="all">All in</button></span></span></div>
+    <p id="betNote"></p>
+    <div class="btns"><button class="ghost" id="betBack">Back</button><button class="go" id="betGo" disabled>START RACE</button></div>
+  </div>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="card glass" style="width:min(340px,100%)">
+    <h2>Paused</h2>
+    <div class="btns" style="justify-content:stretch">
+      <button class="go" id="resumeBtn" style="flex:1">RESUME</button>
+    </div>
+    <div class="btns" style="justify-content:stretch">
+      <button class="ghost" id="restartBtn" style="flex:1">Restart</button>
+      <button class="ghost" id="quitBtn" style="flex:1">Quit to menu</button>
+    </div>
+    <div class="btns" style="justify-content:stretch">
+      <button class="ghost" id="pauseSetBtn" style="flex:1">Settings</button>
+    </div>
+  </div>
+</div>
+
+<div id="results" class="overlay" hidden>
+  <div class="card glass" style="width:min(440px,100%)">
+    <h2 id="resTitle">Finished</h2>
+    <p class="sub" id="resSub"></p>
+    <table id="resTable"></table>
+    <div class="btns">
+      <button class="ghost" id="menuBtn">Change course</button>
+      <button class="go" id="againBtn">RACE AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<div id="settings" class="overlay" hidden>
+  <div class="card glass">
+    <h2>Settings</h2>
+    <div class="seg tabs" id="setTabs"><button data-tab="audio" aria-pressed="true">Audio</button><button data-tab="video">Video</button><button data-tab="interface">Interface</button><button data-tab="controls">Controls</button></div>
+    <div class="setBody">
+      <section data-tab="audio">
+        <div class="set"><span>Master volume</span><span class="rng"><input type="range" data-set="master" min="0" max="100" step="1"><output></output></span></div>
+        <div class="set"><span>Music</span><span class="rng"><input type="range" data-set="music" min="0" max="100" step="1"><output></output></span></div>
+        <div class="set"><span>Sound effects<small>Rolling, collisions, bumpers, falls</small></span><span class="rng"><input type="range" data-set="sfx" min="0" max="100" step="1"><output></output></span></div>
+        <div class="set"><span>Interface sounds<small>Menu clicks, countdown, finish</small></span><span class="rng"><input type="range" data-set="ui" min="0" max="100" step="1"><output></output></span></div>
+        <div class="set"><span>Mute in the background<small>When you switch to another tab or window</small></span><span class="seg" data-set="bgMute"><button data-v="1">On</button><button data-v="0">Off</button></span></div>
+        <p class="setNote" id="audioNote">Browsers only start sound after a click or a key press.</p>
+      </section>
+      <section data-tab="video" hidden>
+        <div class="set"><span>Resolution<small>Auto picks the sharpest image that keeps the frame rate</small></span><span class="seg" data-set="res"><button data-v="auto">Auto</button><button data-v="1">Native</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button><button data-v="0.35">35%</button></span></div>
+        <div class="set"><span>Frame rate<small>A 60 fps cap saves power on 120 Hz screens</small></span><span class="seg" data-set="fps"><button data-v="display">Match display</button><button data-v="60">60 fps</button></span></div>
+        <div class="set"><span>Sun shadows<small>Course shadows; marble and obstacle shadows stay</small></span><span class="seg" data-set="shadows"><button data-v="1">On</button><button data-v="0">Off</button></span></div>
+        <div class="set"><span>Fog quality</span><span class="seg" data-set="fogQ"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></span></div>
+        <div class="set"><span>Brightness</span><span class="rng"><input type="range" data-set="bright" min="60" max="150" step="1"><output></output></span></div>
+        <div class="set"><span>Camera distance<small>Scroll or the right stick still zoom during a race</small></span><span class="rng"><input type="range" data-set="zoom" min="14" max="54" step="1"><output></output></span></div>
+        <div class="setHead">Fog look (foggy courses)</div>
+        <div class="set"><span>Thickness</span><span class="rng"><input id="sThick" type="range" min="0.3" max="3" step="0.01" value="1.5"><output></output></span></div>
+        <div class="set"><span>Height</span><span class="rng"><input id="sHeight" type="range" min="0.6" max="3" step="0.01" value="1.7"><output></output></span></div>
+        <div class="set"><span>Wind</span><span class="rng"><input id="sWind" type="range" min="0" max="3" step="0.01" value="0.6"><output></output></span></div>
+        <div class="set"><span>Refill time</span><span class="rng"><input id="sRefill" type="range" min="1" max="40" step="0.5" value="9"><output></output></span></div>
+        <div class="set"><span>Swirl</span><span class="rng"><input id="sSwirl" type="range" min="0" max="3" step="0.01" value="1"><output></output></span></div>
+        <div class="set"><span>Fog map<small>Shows the fog density on the course instead of the fog</small></span><span class="seg"><button id="mapBtn" aria-pressed="false">Show</button></span></div>
+        <p class="setNote">Each foggy course sets its own fog look when you pick it.</p>
+      </section>
+      <section data-tab="interface" hidden>
+        <div class="set"><span>Name tags</span><span class="seg" data-set="tags"><button data-v="all">All</button><button data-v="mine">Mine</button><button data-v="off">Off</button></span></div>
+        <div class="set"><span>Minimap</span><span class="seg" data-set="minimap"><button data-v="1">On</button><button data-v="0">Off</button></span></div>
+        <div class="set"><span>Standings</span><span class="seg" data-set="standings"><button data-v="1">On</button><button data-v="0">Off</button></span></div>
+        <div class="set"><span>Control hints</span><span class="seg" data-set="hints"><button data-v="1">On</button><button data-v="0">Off</button></span></div>
+        <div class="set"><span>Performance stats<small>Resolution, fps, refresh rate, GPU time</small></span><span class="seg" data-set="stats"><button data-v="1">On</button><button data-v="0">Off</button></span></div>
+      </section>
+      <section data-tab="controls" hidden>
+        <table class="keys">
+          <tr><th>Action</th><th>Keyboard / mouse</th><th>Controller</th></tr>
+          <tr><td>Roll</td><td>Drag from your marble, or WASD / arrows</td><td>Left stick or D-pad</td></tr>
+          <tr><td>Zoom</td><td>Scroll</td><td>Right stick</td></tr>
+          <tr><td>Pause</td><td>Esc or P</td><td>Start</td></tr>
+          <tr><td>Watch another marble (bet mode)</td><td>Tab, or click the standings</td><td>LB / RB</td></tr>
+          <tr><td>Menus</td><td>Mouse, Tab and Enter</td><td>D-pad, A to select, B to go back</td></tr>
+        </table>
+        <div class="set"><span>Stick dead zone<small>Raise it if your marble creeps with the stick at rest</small></span><span class="rng"><input type="range" data-set="deadzone" min="5" max="40" step="1"><output></output></span></div>
+        <div class="set"><span>Controller rumble</span><span class="seg" data-set="rumble"><button data-v="1">On</button><button data-v="0">Off</button></span></div>
+      </section>
+    </div>
+    <div class="btns"><button class="ghost" id="setReset">Reset to defaults</button><button class="go" id="setDone">DONE</button></div>
+  </div>
+</div>
+<div id="stats"></div>
+<div id="status">building courses…</div>
+
+<script>
+(() => {
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('c'), statusEl = $('status');
+const fail = (msg) => { statusEl.textContent = msg; statusEl.classList.add('err'); statusEl.classList.remove('gone'); };
+
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false,
+  powerPreference: 'high-performance', preserveDrawingBuffer: false });
+if (!gl) { fail('WebGL2 is not available in this browser.'); return; }
+if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) {
+  fail('This GPU cannot render to half-float textures.'); return;
+}
+const parallel = gl.getExtension('KHR_parallel_shader_compile');
+const QS = new URLSearchParams(location.search);
+const AUTO = QS.has('auto');                                   // testing aid: your marble drives itself
+let SIM_SPEED = Math.min(8, Math.max(0.25, parseFloat(QS.get('speed')) || 1));   // testing aid
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const NM = 11, SIM_N = parseInt(QS.get('simn'), 10) || 512, WIN = 48;
+const JACOBI = parseInt(QS.get('jac'), 10) || 8;   // warm-started from last step's pressure
+const NB = 16, NC = 24;                 // obstacle boxes / cylinders sent to the GPU
+const PITCH = 50 * Math.PI / 180, PITCHES = [50, 57, 64, 71, 78].map((a) => a * Math.PI / 180);
+const TAN_HALF = Math.tan(16 * Math.PI / 180);
+const YAW = -0.75 * Math.PI, HX = Math.cos(YAW), HZ = Math.sin(YAW);   // the camera looks toward -x,-z
+const MAX_PIXELS = parseFloat(QS.get('px')) || Infinity;   // testing aid: pixel cap
+const FIXED_SCALE = parseFloat(QS.get('scale')) || 0;      // testing aid: fixed render scale, no adapting
+const perf = { frames: 0, cpu: 0, sec: {}, gpu: 0, gpuN: 0, gpuEma: 0 };
+const timed = (k, f) => { const t = performance.now(); const r = f(); perf.sec[k] = (perf.sec[k] || 0) + performance.now() - t; return r; };
+
+const RACERS = [
+  { name: 'You',     f0: [0.80, 0.82, 0.86], css: '#e8edf5' },
+  { name: 'Ruby',    f0: [0.95, 0.16, 0.14], css: '#ff4a40' },
+  { name: 'Amber',   f0: [1.00, 0.52, 0.10], css: '#ff9a2e' },
+  { name: 'Citrine', f0: [0.95, 0.85, 0.20], css: '#f5dc4a' },
+  { name: 'Lime',    f0: [0.42, 0.92, 0.18], css: '#86ec4a' },
+  { name: 'Jade',    f0: [0.10, 0.80, 0.50], css: '#2fd39a' },
+  { name: 'Teal',    f0: [0.10, 0.75, 0.88], css: '#30c8e6' },
+  { name: 'Cobalt',  f0: [0.22, 0.42, 1.00], css: '#5a82ff' },
+  { name: 'Violet',  f0: [0.62, 0.32, 1.00], css: '#a874ff' },
+  { name: 'Magenta', f0: [1.00, 0.24, 0.70], css: '#ff57b8' },
+  { name: 'Copper',  f0: [0.95, 0.50, 0.36], css: '#f0906a' },
+];
+
+const THEMES = {
+  day: { sunDir: [0.42, 0.80, -0.30], sun: [2.3, 2.1, 1.8], amb: [0.40, 0.50, 0.66],
+    skyTop: [0.30, 0.52, 0.90], skyHor: [0.78, 0.86, 0.96], abyss: [0.40, 0.55, 0.78],
+    tileA: [0.86, 0.78, 0.52], tileB: [0.30, 0.66, 0.62], wall: [0.16, 0.30, 0.62],
+    accent: [1.0, 0.74, 0.35], rail: [0.92, 0.22, 0.16], exposure: 0.5 },
+  sunset: { sunDir: [0.60, 0.48, -0.42], sun: [2.6, 1.45, 0.85], amb: [0.36, 0.30, 0.50],
+    skyTop: [0.28, 0.22, 0.52], skyHor: [1.0, 0.62, 0.42], abyss: [0.40, 0.24, 0.40],
+    tileA: [0.78, 0.52, 0.90], tileB: [0.98, 0.62, 0.40], wall: [0.34, 0.16, 0.50],
+    accent: [1.0, 0.86, 0.40], rail: [0.20, 0.80, 0.72], exposure: 0.58 },
+  night: { sunDir: [0.50, 0.62, -0.60], sun: [0.65, 0.78, 1.10], amb: [0.08, 0.11, 0.18],
+    skyTop: [0.007, 0.011, 0.028], skyHor: [0.05, 0.066, 0.11], abyss: [0.025, 0.035, 0.06],
+    tileA: [0.34, 0.46, 0.60], tileB: [0.18, 0.27, 0.38], wall: [0.14, 0.18, 0.28],
+    accent: [0.45, 0.80, 1.0], rail: [0.40, 0.70, 1.0], exposure: 1.25,
+    fogSun: [0.42, 0.50, 0.72], fogSky: [0.035, 0.05, 0.095] },
+  neon: { sunDir: [0.35, 0.75, -0.55], sun: [0.90, 0.70, 1.20], amb: [0.10, 0.08, 0.16],
+    skyTop: [0.02, 0.01, 0.06], skyHor: [0.20, 0.05, 0.25], abyss: [0.035, 0.015, 0.07],
+    tileA: [0.16, 0.16, 0.24], tileB: [0.09, 0.09, 0.15], wall: [0.20, 0.08, 0.26],
+    accent: [0.25, 1.0, 0.95], rail: [1.0, 0.25, 0.70], exposure: 1.1, grid: 1 },
+  meadow: { sunDir: [0.40, 0.80, -0.35], sun: [2.3, 2.15, 1.8], amb: [0.38, 0.48, 0.62],
+    skyTop: [0.28, 0.50, 0.90], skyHor: [0.75, 0.86, 0.95], abyss: [0.40, 0.56, 0.62],
+    tileA: [0.55, 0.80, 0.30], tileB: [0.28, 0.58, 0.24], wall: [0.45, 0.30, 0.18],
+    accent: [1.0, 0.92, 0.45], rail: [0.95, 0.88, 0.78], exposure: 0.5 },
+  desert: { sunDir: [0.55, 0.70, -0.30], sun: [2.5, 2.05, 1.5], amb: [0.45, 0.40, 0.38],
+    skyTop: [0.35, 0.55, 0.85], skyHor: [0.95, 0.82, 0.62], abyss: [0.70, 0.52, 0.36],
+    tileA: [0.92, 0.72, 0.45], tileB: [0.78, 0.48, 0.28], wall: [0.60, 0.30, 0.18],
+    accent: [0.30, 0.85, 0.90], rail: [0.22, 0.52, 0.75], exposure: 0.48 },
+  candy: { sunDir: [0.45, 0.78, -0.30], sun: [2.2, 2.0, 2.0], amb: [0.50, 0.42, 0.55],
+    skyTop: [0.60, 0.50, 0.90], skyHor: [1.0, 0.80, 0.90], abyss: [0.75, 0.55, 0.75],
+    tileA: [1.0, 0.60, 0.80], tileB: [0.52, 0.90, 0.80], wall: [0.92, 0.36, 0.60],
+    accent: [1.0, 0.95, 0.50], rail: [0.92, 0.92, 0.95], exposure: 0.5 },
+  arctic: { sunDir: [0.35, 0.60, -0.50], sun: [2.0, 2.05, 2.2], amb: [0.45, 0.55, 0.72],
+    skyTop: [0.35, 0.55, 0.85], skyHor: [0.85, 0.92, 1.0], abyss: [0.62, 0.74, 0.88],
+    tileA: [0.92, 0.95, 1.0], tileB: [0.66, 0.80, 0.95], wall: [0.28, 0.44, 0.70],
+    accent: [0.30, 0.70, 1.0], rail: [0.85, 0.18, 0.22], exposure: 0.46,
+    fogSun: [1.0, 1.05, 1.15], fogSky: [0.32, 0.38, 0.48] },
+  ocean: { sunDir: [0.45, 0.75, -0.40], sun: [2.2, 2.1, 1.9], amb: [0.30, 0.45, 0.60],
+    skyTop: [0.20, 0.45, 0.85], skyHor: [0.70, 0.85, 0.95], abyss: [0.10, 0.35, 0.55],
+    tileA: [0.95, 0.92, 0.82], tileB: [0.25, 0.62, 0.85], wall: [0.08, 0.30, 0.55],
+    accent: [1.0, 0.60, 0.30], rail: [1.0, 0.95, 0.90], exposure: 0.52 },
+  dawn: { sunDir: [0.70, 0.32, -0.40], sun: [2.4, 1.5, 1.1], amb: [0.35, 0.35, 0.48],
+    skyTop: [0.35, 0.42, 0.70], skyHor: [1.0, 0.75, 0.60], abyss: [0.55, 0.50, 0.60],
+    tileA: [0.85, 0.80, 0.78], tileB: [0.60, 0.62, 0.75], wall: [0.38, 0.36, 0.52],
+    accent: [1.0, 0.70, 0.45], rail: [0.95, 0.55, 0.40], exposure: 0.6,
+    fogSun: [1.0, 0.70, 0.50], fogSky: [0.25, 0.24, 0.32] },
+  mono: { sunDir: [0.45, 0.78, -0.35], sun: [2.1, 2.1, 2.1], amb: [0.40, 0.40, 0.42],
+    skyTop: [0.50, 0.50, 0.55], skyHor: [0.85, 0.85, 0.87], abyss: [0.45, 0.45, 0.47],
+    tileA: [0.85, 0.85, 0.85], tileB: [0.22, 0.22, 0.24], wall: [0.50, 0.50, 0.52],
+    accent: [1.0, 0.20, 0.15], rail: [0.95, 0.15, 0.12], exposure: 0.5 },
+  lava: { sunDir: [0.40, 0.70, -0.50], sun: [1.4, 0.80, 0.60], amb: [0.25, 0.10, 0.08],
+    skyTop: [0.05, 0.02, 0.02], skyHor: [0.45, 0.12, 0.05], abyss: [0.55, 0.12, 0.03],
+    tileA: [0.25, 0.22, 0.22], tileB: [0.12, 0.10, 0.10], wall: [0.15, 0.08, 0.07],
+    accent: [1.0, 0.45, 0.10], rail: [1.0, 0.35, 0.08], exposure: 0.9, grid: 1,
+    fogSun: [0.90, 0.35, 0.15], fogSky: [0.18, 0.05, 0.03] },
+  jungle: { sunDir: [0.42, 0.78, -0.35], sun: [2.1, 2.0, 1.6], amb: [0.25, 0.40, 0.30],
+    skyTop: [0.30, 0.55, 0.60], skyHor: [0.70, 0.85, 0.70], abyss: [0.12, 0.32, 0.22],
+    tileA: [0.62, 0.55, 0.38], tileB: [0.30, 0.45, 0.22], wall: [0.20, 0.32, 0.15],
+    accent: [1.0, 0.80, 0.20], rail: [0.55, 0.35, 0.18], exposure: 0.55 },
+};
+
+// @@COURSE-BEGIN
+const CS = 0.5, BLK = 8, BALL_R = 0.6, RAIL_H = 0.8;
+const GRAV = 24, ACCEL = 9, DRAG = 0.9, AIR = 0.3, SHATTER_V = 14;
+const MAT = { void: 0, floor: 1, rail: 2, ice: 3, start: 5, finish: 6, boost: 10 };
+const F_GAP = 1, F_ICE = 2;
+const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+
+const COURSES = (() => {
+  const B = (a, l = 0) => ({ t: 'bumper', a, l });
+  const S = (a, l, len, w, ph = 0) => ({ t: 'spinner', a, l, len, w, ph });
+  const P = (a, amp, w, ph = 0) => ({ t: 'pusher', a, l: 0, amp, w, ph });
+  const K = (a, l, ph = 0) => ({ t: 'stomper', a, l, ph });
+  return [
+    { name: 'Sunny Steps', theme: 'day', level: 1, fog: null,
+      blurb: 'Wide ramps, friendly rails and a few bumpers. Learn to brake before the edges.',
+      pieces: [
+        { s: 10, w: 8, rails: true, mat: 'start' },
+        { s: 14, drop: 2.5, rails: true },
+        { turn: 1 },
+        { s: 12, drop: 2, w: 8, rails: true, obs: [B(4, -1.8), B(4, 1.8), B(8.5, 0)] },
+        { s: 8, step: 1.5, w: 8, rails: true },
+        { turn: 0 },
+        { s: 6, w: 8, rails: true, mat: 'boost' },
+        { s: 16, drop: 3.5, w: 7 },
+        { s: 8, step: 1.2, w: 7, rails: true, obs: [B(4, -1.5), B(4, 1.5)] },
+        { turn: 1 },
+        { s: 14, drop: 2, w: [7, 4] },
+        { s: 10, w: 4, drop: 1 },
+        { s: 10, step: 1.5, w: 7, rails: true, obs: [S(5, 0, 2.2, 1.3)] },
+        { turn: 0 },
+        { s: 14, drop: 3, w: 7, rails: true },
+        { turn: 1 },
+        { s: 12, drop: 2, w: 8, rails: true, obs: [B(4, 0), B(8, -2.2), B(8, 2.2)] },
+        { s: 6, step: 1.5, w: 8, rails: true, mat: 'boost' },
+        { turn: 0 },
+        { s: 16, drop: 3, w: 6 },
+        { s: 8, step: 1, w: 7, rails: true },
+        { s: 12, w: 8, rails: true, finish: true, end: true },
+      ] },
+    { name: 'Pinball Terraces', theme: 'sunset', level: 2, fog: null,
+      blurb: 'Bumper fields, a first spinner and a pusher on terraces stepping into the sunset.',
+      pieces: [
+        { s: 10, w: 8, rails: true, mat: 'start' },
+        { s: 16, drop: 3, w: 8, rails: true, obs: [B(4, -2), B(4, 1), B(7.5, -0.5), B(7.5, 2.5), B(11, -2.5), B(11, 0.8)] },
+        { turn: 1 },
+        { s: 12, drop: 2, w: 7, obs: [S(6, 0, 2.6, 1.6)] },
+        { s: 6, step: 2, w: 7, rails: true, mat: 'boost' },
+        { turn: 0 },
+        { s: 12, drop: 2.5, w: [7, 3] },
+        { s: 12, w: 3, drop: 1 },
+        { s: 8, step: 1.5, w: 7, rails: true, obs: [B(2.5, -2), B(2.5, 2), B(5.5, 0)] },
+        { turn: 3 },
+        { s: 10, w: 6, drop: 1, rails: true, obs: [S(5, 0, 2.3, -1.8)] },
+        { turn: 0 },
+        { s: 14, drop: 3, w: 6, obs: [P(7, 2, 1.5)] },
+        { s: 6, step: 1.5, w: 7, rails: true, mat: 'boost' },
+        { turn: 1 },
+        { s: 16, drop: 3, w: 8, rails: true, obs: [B(4, -1.8), B(4, 1.8), B(8, 0), B(12, -1.8), B(12, 1.8)] },
+        { turn: 0 },
+        { s: 12, w: 8, rails: true, finish: true, end: true },
+      ] },
+    { name: 'Mistfall', theme: 'night', level: 3,
+      fog: { thickness: 0.9, height: 1.25, wind: 0.6, refill: 9, swirl: 1.1, windAngle: 0.7 },
+      blurb: 'Moonlit catwalks over a sea of fog. Pushers, stompers, and ice before the last bend.',
+      pieces: [
+        { s: 10, w: 8, rails: true, mat: 'start' },
+        { s: 12, drop: 2.5, w: 6, rails: true },
+        { turn: 1 },
+        { s: 14, drop: 2, w: 6, obs: [P(7, 2, 1.3)] },
+        { s: 6, step: 1.5, w: 6, rails: true },
+        { turn: 0 },
+        { s: 12, drop: 1.5, w: [6, 3] },
+        { s: 14, w: 3, drop: 0.5 },
+        { s: 6, step: 1.2, w: 6, rails: true, mat: 'boost' },
+        { s: 12, w: 6, rails: true, obs: [K(3.5, -1.2, 0), K(8.5, 1.2, 0.45)] },
+        { turn: 1 },
+        { s: 14, drop: 2.5, w: 6, obs: [S(7, 0, 2.6, 1.8)] },
+        { turn: 0 },
+        { s: 10, drop: 1, w: 2 },
+        { s: 8, step: 1, w: 6, mat: 'ice', drop: 1, rails: true },
+        { turn: 1 },
+        { s: 12, drop: 2, w: 6, obs: [P(4, 2, 1.5), P(9, 2, 1.5, 1.6)] },
+        { turn: 0 },
+        { s: 10, drop: 1.5, w: 4, rails: true, obs: [K(5, 0, 0.3)] },
+        { s: 6, step: 1.2, w: 6 },
+        { turn: 1 },
+        { s: 14, drop: 2, w: [6, 2] },
+        { s: 8, w: 2, drop: 0.5 },
+        { s: 6, step: 1, w: 6, rails: true, mat: 'boost' },
+        { turn: 0 },
+        { s: 12, w: 8, rails: true, finish: true, end: true },
+      ] },
+    { name: 'The Gauntlet', theme: 'neon', level: 4, fog: null,
+      blurb: 'Steep funnels, ice, jumps over the void, sweepers, stompers and a two-wide catwalk.',
+      pieces: [
+        { s: 10, w: 8, rails: true, mat: 'start' },
+        { s: 12, drop: 3.5, w: [8, 4] },
+        { s: 8, w: 4, mat: 'ice', drop: 1, rails: true },
+        { turn: 1 },
+        { s: 14, w: 5, drop: 2.5, obs: [S(6, 0, 2.3, 2.1)] },
+        { gap: 2.5 },
+        { s: 8, step: 1.5, w: 5, rails: true, mat: 'boost' },
+        { turn: 0 },
+        { s: 16, w: 2, drop: 1.5 },
+        { s: 10, step: 1, w: 6, obs: [P(5, 2.2, 1.7)] },
+        { turn: 1 },
+        { s: 12, w: 6, rails: true, obs: [K(3, -1.4, 0), K(3, 1.4, 0.5), K(8.5, 0, 0.25)] },
+        { s: 14, w: 6, drop: 3, mat: 'ice', rails: true, obs: [B(5, -1.5), B(5, 1.5), B(10, 0)] },
+        { turn: 0 },
+        { s: 14, w: 5, drop: 1.5, obs: [S(7, 0, 2.2, -2.4)] },
+        { gap: 2 },
+        { s: 8, step: 1.2, w: 6, rails: true },
+        { turn: 1 },
+        { s: 12, w: 3, drop: 1.5 },
+        { s: 6, step: 1, w: 6, rails: true, mat: 'boost' },
+        { turn: 0 },
+        { s: 12, w: 8, rails: true, finish: true, end: true },
+      ] },
+    { name: 'Maelstrom', theme: 'ocean', level: 3, fog: null,
+      blurb: 'Banked curves and a funnel bowl, then three laps down a spiral pit to a finish at the bottom.',
+      pieces: [
+        { s: 10, w: 8, rails: true, mat: 'start' },
+        { s: 10, drop: 2, w: 7, rails: true },
+        { arc: 1, r: 7, drop: 1.5, bank: 0.2, w: 7, rails: true },
+        { s: 8, drop: 1.5, w: 7, obs: [B(4, 0)] },
+        { arc: -1, r: 8, drop: 1.5, bank: 0.2, w: 7 },
+        { bowl: 7, k: 0.28, wc: 4 },
+        { s: 6, step: 1, w: 6, rails: true, mat: 'boost' },
+        { arc: 1, r: 7, drop: 1, bank: 0.15, w: 6, rails: true },
+        { s: 26, drop: 2.5, w: 6, rails: true },
+        { pit: 3, r: [25.5, 6], w: 5, drop: 10.5, sg: -1 },
+      ] },
+    { name: 'Roundabout', theme: 'candy', level: 2, fog: null,
+      blurb: 'Round platforms swept by giant spinners, linked by banked hairpins.',
+      pieces: [
+        { s: 10, w: 8, rails: true, mat: 'start' },
+        { s: 8, drop: 1.5, w: 7, rails: true },
+        { disc: 6, step: 1, w: 6, obs: [S(6, 0, 4.7, 0.9)] },
+        { s: 6, w: 6, drop: 1, rails: true },
+        { arc: 2, r: 6, drop: 2, bank: 0.2, w: 6, rails: true },
+        { s: 6, w: 6, drop: 1, rails: true },
+        { arc: -2, r: 6, drop: 2, bank: 0.2, w: 6, rails: true },
+        { disc: 6, step: 1, w: 6, obs: [B(4, -2), B(4, 2), B(8, 0)] },
+        { arc: 1, r: 7, drop: 1.5, bank: 0.2, w: 6, rails: true },
+        { s: 8, w: 6, drop: 1.5, mat: 'boost', rails: true },
+        { disc: 6.5, step: 1, w: 6, obs: [S(6.5, 0, 5.2, -1.0)] },
+        { arc: -1, r: 7, drop: 1.5, bank: 0.2, w: 6, rails: true },
+        { s: 10, drop: 2, w: 6 },
+        { disc: 5, step: 1, w: 8 },
+        { s: 12, w: 8, rails: true, finish: true, end: true },
+      ] },
+    { name: 'Corkscrew', theme: 'sunset', level: 3, fog: null,
+      blurb: 'Hairpin after banked hairpin, narrowing as it goes, into a two-lap spiral pit.',
+      pieces: [
+        { s: 10, w: 8, rails: true, mat: 'start' },
+        { s: 8, drop: 2, w: 6, rails: true },
+        { arc: 2, r: 5.5, drop: 2.5, bank: 0.25, w: 6, rails: true },
+        { s: 6, drop: 1, w: 6, obs: [P(3, 2, 1.5)] },
+        { arc: -2, r: 5.5, drop: 2.5, bank: 0.25, w: 6 },
+        { s: 6, drop: 1, w: 5 },
+        { arc: 2, r: 5, drop: 2.5, bank: 0.25, w: 5, rails: true },
+        { s: 6, drop: 1, w: 5, obs: [S(3, 0, 2, 1.6)] },
+        { arc: -2, r: 5, drop: 2.5, bank: 0.25, w: 5 },
+        { s: 8, w: 4, drop: 1 },
+        { arc: 1, r: 6, drop: 1.5, bank: 0.2, w: 5, rails: true },
+        { s: 20, drop: 2, w: 6, rails: true },
+        { pit: 2, r: [19, 6], w: 5, drop: 7, sg: -1 },
+      ] },
+  ];
+})();
+
+
+// ---- generated courses: a seeded walk through a library of course sections ----
+function rngFrom(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const FEATURE = { ramp: 'long ramps', terrace: 'terrace drops', bumpers: 'bumper fields', spinner: 'spinners', twinspin: 'spinners',
+  pusher: 'pushers', stomper: 'stompers', catwalk: 'catwalks', ice: 'ice', boost: 'boost pads', gap: 'jumps',
+  stairs: 'staircases', zigzag: 'zigzag walks', switchback: 'switchbacks', curve: 'banked curves', sweep: 'hairpin sweeps',
+  bowl: 'funnel bowls', disc: 'round platforms' };
+function genPieces(def, seed) {
+  const g = def.gen, L = def.level, rnd = rngFrom(seed);
+  const R = (a, b) => a + (b - a) * rnd(), RI = (a, b) => Math.floor(a + (b - a + 1) * rnd());
+  const r1 = (v) => Math.round(v * 10) / 10, hf = (v) => Math.round(v * 2) / 2;
+  const B = (a, l) => ({ t: 'bumper', a: r1(a), l: r1(l) });
+  const S = (a, len, w) => ({ t: 'spinner', a: r1(a), l: 0, len: r1(len), w: r1(w), ph: r1(R(0, 6)) });
+  const P = (a, amp, w) => ({ t: 'pusher', a: r1(a), l: 0, amp: r1(amp), w: r1(w), ph: r1(R(0, 6)) });
+  const K = (a, l) => ({ t: 'stomper', a: r1(a), l: r1(l), ph: r1(R(0, 1)) });
+  const W = g.w ?? [8, 7, 6, 6][L - 1], railP = g.rails ?? [0.85, 0.6, 0.4, 0.25][L - 1];
+  const cw = g.cw ?? [4, 3, rnd() < 0.5 ? 2 : 3, 2][L - 1], spinW = 1.0 + 0.2 * L;
+  const pcs = [{ s: 10, w: 8, rails: true, mat: 'start' }], feats = {};
+  let heading = 0, len = 10, w = 8;
+  const add = (p) => {
+    pcs.push(p);
+    len += p.s || p.gap || (p.arc ? Math.abs(p.arc) * 1.571 * p.r : 0) || (p.bowl || p.disc || 0) * 2;
+    if (p.w !== undefined) w = Array.isArray(p.w) ? p.w[1] : p.w;
+    if (p.wc !== undefined) w = p.wc;
+  };
+  const turnTo = (d) => { pcs.push({ turn: d }); len += w * 0.785; heading = d; };
+  const bank = () => Math.round(R(0.1, 0.25) * 100) / 100;
+  // a banked quarter circle instead of a square corner
+  const curveTo = (d) => {
+    add({ arc: d === (heading + 1) % 4 ? 1 : -1, r: hf(W / 2 + R(2.5, 6)), drop: r1(R(0.5, 2)), bank: bank(), w: W, rails: rails(0.2) });
+    heading = d;
+  };
+  const sideSg = () => (heading === 0 ? 1 : -1);   // turning toward the side the course has not been
+  const other = () => (heading === 0 ? 1 : 0);
+  const rails = (bonus = 0) => rnd() < railP + bonus;
+  const hwOf = (r) => W / 2 - (r ? 0.5 : 0);
+  const SEG = {
+    ramp: () => add({ s: RI(10, 16), drop: r1(R(1.5, 2.5 + 0.4 * L)), w: W, rails: rails() }),
+    terrace: () => add({ s: RI(6, 9), step: r1(R(1, 1.8)), w: W, rails: rails(0.2) }),
+    bumpers: () => {
+      const s = RI(12, 16), r = rails(0.25), hw = hwOf(r), obs = [];
+      let k = 0;
+      for (let a = 3; a <= s - 2.5; a += R(3.5, 4.5), k++) {
+        if (k % 2 === 0) { if (hw >= 3) obs.push(B(a, -hw * 0.5), B(a, hw * 0.5)); else obs.push(B(a, 0)); }
+        else { obs.push(B(a, 0)); if (hw >= 3.4) obs.push(B(a, -hw + 0.9), B(a, hw - 0.9)); }
+      }
+      add({ s, drop: r1(R(1, 2.5)), w: W, rails: r, obs });
+    },
+    spinner: () => {
+      const s = RI(10, 14), r = rails(0.25);
+      add({ s, drop: r1(R(0.5, 2)), w: W, rails: r, obs: [S(s / 2, Math.min(2.8, hwOf(r) - 0.4), (rnd() < 0.5 ? 1 : -1) * R(spinW, spinW + 0.5))] });
+    },
+    twinspin: () => {
+      const r = rails(0.3), len = Math.min(2.8, hwOf(r) - 0.4), sp = R(spinW, spinW + 0.4);
+      add({ s: 16, drop: r1(R(1, 2)), w: W, rails: r, obs: [S(4.5, len, sp), S(11.5, len, -sp)] });
+    },
+    pusher: () => {
+      const s = RI(12, 16), r = rails(), amp = Math.max(1, hwOf(r) - 0.8);
+      const obs = [P(s * 0.35, amp, R(1.2, 1.8))];
+      if (L >= 3 || rnd() < 0.4) obs.push(P(s * 0.75, amp, R(1.2, 1.8)));
+      add({ s, drop: r1(R(1, 2.5)), w: W, rails: r, obs });
+    },
+    stomper: () => {
+      if (rnd() < 0.35) { add({ s: 10, w: 4, rails: true, drop: 0.5, obs: [K(5, 0)] }); return; }
+      const w6 = Math.max(W, 6);
+      const obs = L >= 3 && rnd() < 0.6 ? [K(3, -1.4), K(3, 1.4), K(8.5, 0)] : [K(3.5, -1.3), K(8.5, 1.3)];
+      add({ s: 12, w: w6, rails: true, obs });
+    },
+    catwalk: () => {
+      add({ s: RI(8, 12), drop: r1(R(1, 2)), w: [W, cw] });
+      add({ s: RI(8, 16), drop: r1(R(0, 1.5)), w: cw });
+      add({ s: 6, step: r1(R(0.8, 1.5)), w: W, rails: true });
+    },
+    ice: () => {
+      add({ s: RI(10, 16), drop: r1(R(1.5, 3)), w: W, mat: 'ice', rails: L <= 2 || rnd() < 0.5 });
+      add({ s: 6, step: r1(R(0.8, 1.4)), w: W, rails: true });
+    },
+    boost: () => add({ s: 6, step: r1(R(0.5, 1.2)), w: W, rails: true, mat: 'boost' }),
+    gap: () => {
+      add({ s: RI(9, 12), drop: r1(R(1.5, 2.5)), w: W });
+      add({ gap: hf(R(2, 2 + 0.3 * L)) });
+      add({ s: 8, step: r1(R(1.2, 1.8)), w: Math.max(W, 6), rails: true });
+    },
+    stairs: () => { for (let k = RI(4, 7); k > 0; k--) add({ s: 3, step: 0.6, w: W, rails: true }); },
+    zigzag: () => {
+      const z = L <= 2 ? Math.max(cw, 3) : cw;
+      add({ s: 6, drop: 1, w: [W, z] });
+      for (let k = RI(2, 4); k > 0; k--) { turnTo(other()); add({ s: RI(5, 8), w: z, drop: r1(R(0.3, 1)) }); }
+      add({ s: 6, step: 1, w: W, rails: true });
+    },
+    curve: () => curveTo(other()),
+    sweep: () => {
+      const sg = sideSg(), r = hf(W / 2 + R(2, 4)), rl = rails(0.3);
+      add({ arc: 2 * sg, r, drop: r1(R(1, 2.5)), bank: bank(), w: W, rails: rl });
+      add({ s: RI(4, 8), w: W, drop: r1(R(0.5, 1.5)), rails: rl });
+      add({ arc: -2 * sg, r, drop: r1(R(1, 2.5)), bank: bank(), w: W, rails: rl });
+    },
+    bowl: () => {
+      add({ bowl: hf(R(6, 8)), k: Math.round(R(0.22, 0.32) * 100) / 100, wc: L >= 3 ? 3 : 4, sl: 0.2 });
+      add({ s: 6, step: r1(R(0.5, 1)), w: W, rails: true });
+    },
+    disc: () => {
+      const Rd = hf(R(4.5, 6.5)), obs = [];
+      if (L >= 2 && rnd() < 0.55) obs.push(S(Rd, Rd - 1.3, (rnd() < 0.5 ? 1 : -1) * R(0.8, 0.8 + 0.2 * L)));
+      else if (rnd() < 0.7) obs.push(B(Rd - 2, -2), B(Rd - 2, 2), B(Rd + 1.5, 0));
+      add({ disc: Rd, step: r1(R(0.5, 1.2)), w: W, obs });
+      if (L >= 3 && rnd() < 0.5) add({ s: RI(5, 8), w: cw, drop: 0.5 });
+    },
+    switchback: () => {
+      const main = heading;
+      turnTo(heading === 0 ? 3 : 2);
+      add({ s: RI(6, 10), w: W, rails: true, drop: r1(R(0.5, 1.5)) });
+      turnTo(main);
+      add({ s: 6, w: W, rails: rails(), drop: 0.5 });
+    },
+  };
+  const mix = Object.entries(g.mix), total = mix.reduce((a, [, v]) => a + v, 0);
+  let lastSeg = '';
+  while (len < g.len) {
+    let r = rnd() * total, seg = mix[0][0];
+    for (const [k, v] of mix) { r -= v; if (r <= 0) { seg = k; break; } }
+    if (seg === lastSeg && mix.length > 1 && rnd() < 0.6) continue;
+    SEG[seg]();
+    feats[seg] = (feats[seg] || 0) + 1;
+    lastSeg = seg;
+    if (heading <= 1 && rnd() < (g.turny ?? 0.55)) { if (g.curvy && rnd() < g.curvy) curveTo(other()); else turnTo(other()); }
+  }
+  if (g.pit) {
+    // finale: a run-in, then laps of an inward spiral down to a finish floor at the bottom
+    const r0 = 6 + g.pit * 6.5;
+    add({ s: hf(r0 * 0.9), drop: 1.5, w: 6, rails: true });
+    add({ pit: g.pit, r: [r0, 6], w: 5, drop: g.pit * 3.5, sg: sideSg() });
+  } else add({ s: 12, w: 8, rails: true, finish: true, end: true });
+  return { pieces: pcs, feats };
+}
+function blurbFor(def, feats) {
+  const names = [];
+  for (const [k] of Object.entries(feats).sort((a, b) => b[1] - a[1])) { const n = FEATURE[k]; if (!names.includes(n)) names.push(n); }
+  const top = names.slice(0, 4);
+  let t = top.length > 1 ? top.slice(0, -1).join(', ') + ' and ' + top[top.length - 1] : top[0] || 'A plain run';
+  t = t[0].toUpperCase() + t.slice(1) + '.';
+  if (def.gen.pit) t += ' Ends in a spiral pit.';
+  return def.fog ? t + ' Under fog.' : t;
+}
+// generated pieces are kept only when the course never crosses itself
+function piecesFor(def) {
+  if (def.pieces) return def.pieces;
+  for (let k = 0; k < 80; k++) {
+    const { pieces, feats } = genPieces(def, def.gen.seed + k * 7919);
+    if (buildCourse(def, pieces).overlaps === 0) { def.pieces = pieces; def.blurb = blurbFor(def, feats); return pieces; }
+  }
+  throw new Error('could not lay out ' + def.name);
+}
+const GEN = (name, theme, level, len, mix, extra = {}) =>
+  ({ name, theme, level, fog: extra.fog || null, gen: { seed: extra.seed ?? hashName(name), len, mix, ...extra } });
+function hashName(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+const FOG_DAWN = { thickness: 0.8, height: 1.3, wind: 0.5, refill: 10, swirl: 1.0, windAngle: 0.3 };
+const FOG_NIGHT = { thickness: 0.9, height: 1.25, wind: 0.6, refill: 9, swirl: 1.1, windAngle: 0.7 };
+const FOG_SMOKE = { thickness: 0.7, height: 1.6, wind: 1.2, refill: 6, swirl: 1.6, windAngle: 2.0 };
+const FOG_SNOW = { thickness: 1.0, height: 1.4, wind: 1.8, refill: 5, swirl: 1.4, windAngle: -0.8 };
+const ALL = { ramp: 1, terrace: 1, bumpers: 1.5, spinner: 1.5, twinspin: 1, pusher: 1.5, stomper: 1.5, catwalk: 1.5, ice: 1, boost: 0.7, gap: 1, stairs: 0.6, zigzag: 0.8, switchback: 0.5 };
+COURSES.push(
+  GEN('Meadow Run', 'meadow', 1, 200, { ramp: 3, terrace: 2, bumpers: 2, boost: 1 }),
+  GEN('Sandstone Stair', 'desert', 1, 210, { stairs: 3, terrace: 2, ramp: 2, bumpers: 1 }),
+  GEN('Candy Slide', 'candy', 1, 220, { ramp: 3, boost: 2, bumpers: 2, spinner: 1 }),
+  GEN('Tidepools', 'ocean', 1, 220, { ice: 2, bumpers: 2, ramp: 2, terrace: 1 }, { w: 8 }),
+  GEN('Long Way Down', 'mono', 1, 380, { ramp: 3, stairs: 2, terrace: 2, bumpers: 1, boost: 1 }),
+  GEN('Glacier Glide', 'arctic', 2, 230, { ice: 4, ramp: 2, boost: 1, bumpers: 1 }),
+  GEN('Copper Canyon', 'desert', 2, 240, { ramp: 2, pusher: 3, terrace: 2, catwalk: 1 }),
+  GEN('Bumper Bay', 'ocean', 2, 230, { bumpers: 5, ramp: 1, boost: 1, spinner: 1 }),
+  GEN('Dawn Mist', 'dawn', 2, 240, { terrace: 3, catwalk: 2, ramp: 2 }, { fog: FOG_DAWN }),
+  GEN('Spin Cycle', 'candy', 2, 240, { spinner: 3, twinspin: 2, ramp: 1, terrace: 1 }),
+  GEN('Lantern Walk', 'night', 2, 250, { catwalk: 3, zigzag: 1, ramp: 2, terrace: 1 }, { fog: FOG_NIGHT }),
+  GEN('Jungle Gym', 'jungle', 2, 250, { ramp: 1, bumpers: 1, spinner: 1, pusher: 1, stomper: 1, catwalk: 1, boost: 1, stairs: 1 }),
+  GEN('Switchback Summit', 'arctic', 2, 260, { switchback: 4, ramp: 2, terrace: 1, ice: 1 }, { turny: 0.4 }),
+  GEN('Clockwork', 'mono', 3, 250, { spinner: 3, twinspin: 2, pusher: 3 }),
+  GEN('Lava Steps', 'lava', 3, 250, { terrace: 3, stomper: 2, catwalk: 2, stairs: 1 }),
+  GEN('Zigzag Ridge', 'meadow', 3, 250, { zigzag: 4, ramp: 1, catwalk: 1 }, { turny: 0.3 }),
+  GEN('Frostbite', 'arctic', 3, 260, { ice: 3, gap: 2, ramp: 1, catwalk: 1 }),
+  GEN('Neon Alley', 'neon', 3, 250, { pusher: 3, stomper: 3, boost: 1 }),
+  GEN('Hammer Hall', 'mono', 3, 240, { stomper: 5, terrace: 1, ramp: 1 }),
+  GEN('Cloud Bridge', 'dawn', 3, 260, { catwalk: 3, gap: 2, zigzag: 1 }, { fog: FOG_DAWN }),
+  GEN('Sugar Rush', 'candy', 3, 280, { boost: 3, gap: 2, ramp: 2, spinner: 1 }),
+  GEN('Ember Drop', 'lava', 3, 260, { terrace: 3, ramp: 3, gap: 1, pusher: 1 }),
+  GEN('Haunted Hollow', 'night', 3, 260, { stomper: 2, pusher: 2, catwalk: 2, terrace: 1 }, { fog: FOG_NIGHT }),
+  GEN('Vine Bridges', 'jungle', 3, 270, { catwalk: 3, zigzag: 2, spinner: 1 }),
+  GEN('Grand Descent', 'sunset', 3, 420, { ramp: 2, bumpers: 2, spinner: 1, pusher: 1, stomper: 1, catwalk: 1, terrace: 1, boost: 1, ice: 1 }),
+  GEN('The Pinwheel', 'sunset', 4, 260, { spinner: 3, twinspin: 3, catwalk: 1 }),
+  GEN('Blackout', 'neon', 4, 270, { catwalk: 3, spinner: 2, gap: 1, zigzag: 1 }),
+  GEN('Magma Core', 'lava', 4, 290, { ...ALL, switchback: 0.5 }, { fog: FOG_SMOKE }),
+  GEN('Whiteout', 'arctic', 4, 270, { ice: 3, catwalk: 2, gap: 2 }, { fog: FOG_SNOW }),
+  GEN('Final Exam', 'neon', 4, 420, ALL),
+  GEN('Ring Road', 'meadow', 1, 230, { curve: 3, ramp: 2, bumpers: 1, boost: 1 }, { curvy: 0.85, turny: 0.7 }),
+  GEN('Saucer Hop', 'arctic', 2, 250, { disc: 4, catwalk: 2, ramp: 1 }, { curvy: 0.5 }),
+  GEN('Funnel Falls', 'jungle', 2, 260, { bowl: 3, ramp: 1, curve: 2, terrace: 1 }, { curvy: 0.6 }),
+  GEN('Whirlpool', 'ocean', 3, 230, { bowl: 2, sweep: 2, curve: 2, spinner: 1 }, { curvy: 0.6, pit: 2 }),
+  GEN('Spiral Mine', 'lava', 3, 220, { curve: 2, stomper: 2, sweep: 1, disc: 1 }, { curvy: 0.6, pit: 3, fog: FOG_SMOKE }),
+  GEN('Halo', 'neon', 4, 260, { sweep: 2, disc: 2, catwalk: 2, spinner: 1 }, { curvy: 0.7, pit: 2 }),
+  GEN('The Drain', 'mono', 4, 260, { bowl: 2, sweep: 2, curve: 1, pusher: 1, gap: 1 }, { curvy: 0.5, pit: 3 }),
+);
+
+// grip budget: the thrust that can hold a marble on a curve of radius r
+const cornerSpeed = (r) => Math.sqrt(ACCEL * 0.75 * r);
+
+// A turtle walks the piece list, producing solid shapes, a centre line and obstacles.
+function buildCourse(def, pieces = piecesFor(def)) {
+  // every shape knows its bounding box and answers "what is the cell at (X, Z)?" as [top, gx, gz, mat] or null
+  const shapes = [], raw = [], obsDefs = [], checkRaw = [];
+  let x = 0, z = 0, y = 0, d = 0, w = 8, rails = true, finishRaw = 0;
+  const pt = (px, py, pz, hw, flag) => raw.push({ x: px, y: py, z: pz, hw, flag });
+  const TAU = Math.PI * 2;
+  const matOf = (pc) => pc.mat === 'ice' ? MAT.ice : pc.mat === 'boost' ? MAT.boost + d : pc.mat === 'start' ? MAT.start : pc.finish ? MAT.finish : MAT.floor;
+  const box = (cx, cz, r) => [cx - r, cz - r, cx + r, cz + r];
+  // a centred arc / spiral: radius r0 -> r1 over Th radians, turning sg (+1 = toward the left normal)
+  function arcShape(cx, cz, ux0, uz0, sg, Th, r0, r1, wA, y0, drop, bank, rl, mat) {
+    const drdp = (r1 - r0) / Th, rmax = Math.max(r0, r1) + wA / 2 + 1;
+    // banking eases in and out over the first and last few units, so the joins stay flush
+    const pr = Math.min(Th / 3, 3 / ((r0 + r1) / 2));
+    const bu = (p) => Math.max(0, Math.min(1, p / pr, (Th - p) / pr));
+    const bf = (p) => { const u = bu(p); return u * u * (3 - 2 * u); };
+    const dbf = (p) => { const u = bu(p); if (u >= 1 || u <= 0) return 0; return 6 * u * (1 - u) * (p < Th / 2 ? 1 : -1) / pr; };
+    return { type: 'arc', bbox: box(cx, cz, rmax), at(X, Z) {
+      const vx = X - cx, vz = Z - cz, rx = Math.hypot(vx, vz);
+      if (rx < 1e-3) return null;
+      let ph = sg * Math.atan2(ux0 * vz - uz0 * vx, ux0 * vx + uz0 * vz);
+      if (ph < 0) ph += TAU;
+      let best = null, bl = wA / 2;
+      for (let p = ph; p <= Th + 1e-6; p += TAU) {
+        const l = rx - (r0 + drdp * p);
+        if (Math.abs(l) < bl) { bl = Math.abs(l); best = [p, l]; }
+      }
+      if (!best) return null;
+      const [p, l] = best, rhx = vx / rx, rhz = vz / rx, tx = -sg * rhz, tz = sg * rhx;
+      const b = bank * bf(p), dhdp = -drop / Th + bank * dbf(p) * l;
+      const gx = dhdp * tx / rx + b * (rhx - drdp * tx / rx), gz = dhdp * tz / rx + b * (rhz - drdp * tz / rx);
+      const rail = rl && Math.abs(l) > wA / 2 - CS;
+      return [y0 - drop * p / Th + b * l + (rail ? RAIL_H : 0), gx, gz, rail ? MAT.rail : mat];
+    } };
+  }
+  for (const pc of pieces) {
+    const [dx, dz] = DIRS[d], nx = -dz, nz = dx;
+    const x0 = x, z0 = z;
+    if (pc.turn !== undefined) {
+      const [ex, ez] = DIRS[pc.turn], sgn = nx * ex + nz * ez;
+      if (Math.abs(sgn) !== 1) throw new Error('bad turn in ' + def.name);
+      const L = w, y0 = y, rl = rails;
+      shapes.push({ type: 'corner', bbox: [Math.min(x0, x0 + dx * L) - L, Math.min(z0, z0 + dz * L) - L, Math.max(x0, x0 + dx * L) + L, Math.max(z0, z0 + dz * L) + L],
+        at(X, Z) {
+          const a = (X - x0) * dx + (Z - z0) * dz, l = (X - x0) * nx + (Z - z0) * nz;
+          if (a < 0 || a >= L || Math.abs(l) >= L / 2) return null;
+          const rail = rl && (a > L - CS || l * sgn < -L / 2 + CS);
+          return [y0 + (rail ? RAIL_H : 0), 0, 0, rail ? MAT.rail : MAT.floor];
+        } });
+      const r = w / 2, ix = x + ex * r, iz = z + ez * r, n = Math.max(3, Math.ceil(Math.PI / 2 * r / 0.25));
+      for (let k = 0; k < n; k++) {
+        const th = k / n * Math.PI / 2;
+        pt(ix - ex * r * Math.cos(th) + dx * r * Math.sin(th), y, iz - ez * r * Math.cos(th) + dz * r * Math.sin(th), r - (rails ? CS : 0), 0);
+      }
+      x += (dx + ex) * r; z += (dz + ez) * r; d = pc.turn;
+      continue;
+    }
+    if (pc.gap) {
+      for (let a = 0; a < pc.gap; a += 0.25) pt(x + dx * a, y, z + dz * a, 0.3, F_GAP);
+      x += dx * pc.gap; z += dz * pc.gap;
+      continue;
+    }
+    if (pc.arc !== undefined || pc.pit !== undefined) {
+      // curved piece (whole quarter turns); a pit is an inward spiral that ends the course on a floor at the bottom
+      const isPit = pc.pit !== undefined, q = Math.abs(isPit ? pc.pit * 4 : pc.arc);
+      const sg = isPit ? (pc.sg || 1) : Math.sign(pc.arc), Th = q * Math.PI / 2;
+      const [r0, r1] = Array.isArray(pc.r) ? pc.r : [pc.r, pc.r];
+      const wA = pc.w ?? w;
+      rails = isPit ? true : !!pc.rails;
+      y -= pc.step || 0;
+      const cx = x + sg * nx * r0, cz = z + sg * nz * r0, ux0 = -sg * nx, uz0 = -sg * nz;
+      const drop = pc.drop || 0, bank = pc.bank || 0, y0 = y;
+      shapes.push(arcShape(cx, cz, ux0, uz0, sg, Th, r0, r1, wA, y0, drop, bank, rails, MAT.floor));
+      checkRaw.push(raw.length);
+      const rs = raw.length, at = (p) => {
+        const r = r0 + (r1 - r0) * p / Th, c = Math.cos(sg * p), sn = Math.sin(sg * p);
+        const ux = ux0 * c - uz0 * sn, uz = ux0 * sn + uz0 * c;
+        return { x: cx + ux * r, z: cz + uz * r, ux, uz, r };
+      };
+      const rav = (r0 + r1) / 2;
+      for (let p = 0; p < Th; p += 0.25 / rav) { const P = at(p); pt(P.x, y0 - drop * p / Th, P.z, wA / 2 - (rails ? CS : 0), 0); }
+      for (const o of pc.obs || []) {
+        const p = Math.min(Th, o.a / rav), P = at(p), lo = -sg * o.l;   // o.l is in the path frame
+        obsDefs.push({ ...o, wx: P.x + P.ux * lo, wz: P.z + P.uz * lo, base: y0 - drop * p / Th + bank * lo,
+          nx: -sg * P.ux, nz: -sg * P.uz, dx: -sg * P.uz, dz: sg * P.ux, raw: rs + Math.round(o.a / 0.25) });
+      }
+      const E = at(Th);
+      x = E.x; z = E.z; y = y0 - drop; w = wA;
+      d = ((d + sg * q) % 4 + 4) % 4;
+      if (isPit) {
+        // the floor of the pit fills everything inside the last lap, a little lower
+        finishRaw = raw.length;
+        const fy = y - 0.6, rIn = r0 + (r1 - r0) * Math.max(0, Th - TAU) / Th - wA / 2;
+        shapes.push({ type: 'fill', fillOnly: true, bbox: box(cx, cz, rIn + 1), at(X, Z) {
+          return Math.hypot(X - cx, Z - cz) < rIn ? [fy, 0, 0, MAT.finish] : null;
+        } });
+        const ex = cx - x, ez = cz - z, el = Math.hypot(ex, ez);
+        for (let a = 0.5; a < el; a += 0.25) pt(x + ex / el * a, fy, z + ez / el * a, 1.5, 0);
+        x = cx; z = cz; y = fy;
+      }
+      continue;
+    }
+    if (pc.bowl !== undefined || pc.disc !== undefined) {
+      // round pieces entered and left straight through the middle: a funnel bowl, or a flat round platform
+      const R = pc.bowl ?? pc.disc, isBowl = pc.bowl !== undefined;
+      y -= pc.step || 0;
+      const cx = x + dx * R, cz = z + dz * R, y0 = y, wIn = w, rl = pc.rails !== false;
+      const k = pc.k ?? 0.28, sl = pc.sl ?? 0.2, wc = pc.wc ?? 4, wOut = isBowl ? wc : (pc.w ?? w);
+      const hc = isBowl ? y0 - k * R : y0, mat = matOf(pc);
+      shapes.push({ type: isBowl ? 'bowl' : 'disc', bbox: box(cx, cz, R + 1), at(X, Z) {
+        const vx = X - cx, vz = Z - cz, r0 = Math.hypot(vx, vz);
+        const a = vx * dx + vz * dz, l = vx * nx + vz * nz;
+        // the entry and exit strips are filled out to full width, so no notches open up beside the circle
+        const open = (a < 0 && a >= -R && Math.abs(l) < wIn / 2) || (a > 0 && a <= R && Math.abs(l) < wOut / 2);
+        if (r0 >= R && !open) return null;
+        const r = Math.min(r0, R);
+        const rail = rl && r0 > R - CS && !open;
+        if (isBowl && a > -0.5 && Math.abs(l) < wc / 2) return [hc - sl * Math.max(a, 0), -sl * dx, -sl * dz, mat];
+        if (!isBowl) return [y0 + (rail ? RAIL_H : 0), 0, 0, rail ? MAT.rail : mat];
+        const rr = Math.max(r, 1e-3);
+        return [hc + k * r + (rail ? RAIL_H : 0), k * vx / rr, k * vz / rr, rail ? MAT.rail : mat];
+      } });
+      checkRaw.push(raw.length);
+      const rs = raw.length;
+      for (let a = 0; a < 2 * R; a += 0.25) {
+        const yy = isBowl ? (a < R ? hc + k * (R - a) : hc - sl * (a - R)) : y0;
+        pt(x + dx * a, yy, z + dz * a, isBowl ? (a < R ? R * 0.6 : wc / 2) : (R * 0.75), 0);
+      }
+      for (const o of pc.obs || []) obsDefs.push({ ...o, wx: x + dx * o.a + nx * o.l, wz: z + dz * o.a + nz * o.l, base: y0, nx, nz, dx, dz, raw: rs + Math.round(o.a / 0.25) });
+      x += dx * 2 * R; z += dz * 2 * R; y = isBowl ? hc - sl * R : y0; w = wOut;
+      continue;
+    }
+    const L = pc.s;
+    const w0 = Array.isArray(pc.w) ? pc.w[0] : (pc.w ?? w), w1 = Array.isArray(pc.w) ? pc.w[1] : w0;
+    rails = !!pc.rails;
+    y -= pc.step || 0;
+    const k = (pc.drop || 0) / L, gx = -k * dx, gz = -k * dz;
+    const mat = matOf(pc), y0 = y, rl = rails, end = !!pc.end;
+    const wm = Math.max(w0, w1) / 2 + 1;
+    shapes.push({ type: 'straight', x, z, dx, dz, nx, nz, L,
+      bbox: [Math.min(x0, x0 + dx * L) - wm, Math.min(z0, z0 + dz * L) - wm, Math.max(x0, x0 + dx * L) + wm, Math.max(z0, z0 + dz * L) + wm],
+      at(X, Z) {
+        const a = (X - x0) * dx + (Z - z0) * dz, l = (X - x0) * nx + (Z - z0) * nz;
+        if (a < 0 || a >= L) return null;
+        const hw = (w0 + (w1 - w0) * a / L) / 2;
+        if (Math.abs(l) >= hw) return null;
+        const rail = rl && (Math.abs(l) > hw - CS || (end && a > L - CS));
+        return [y0 + gx * (X - x0) + gz * (Z - z0) + (rail ? RAIL_H : 0), gx, gz, rail ? MAT.rail : mat];
+      } });
+    if (pc.finish) finishRaw = raw.length;
+    checkRaw.push(raw.length);
+    const r0 = raw.length;
+    for (let a = 0; a < L; a += 0.25) pt(x + dx * a, y - k * a, z + dz * a, (w0 + (w1 - w0) * a / L) / 2 - (rails ? CS : 0), mat === MAT.ice ? F_ICE : 0);
+    for (const o of pc.obs || []) {
+      obsDefs.push({ ...o, wx: x + dx * o.a + nx * o.l, wz: z + dz * o.a + nz * o.l, base: y - k * o.a, nx, nz, dx, dz, raw: r0 + Math.round(o.a / 0.25) });
+    }
+    x += dx * L; z += dz * L; y -= pc.drop || 0; w = w1;
+  }
+  pt(x, y, z, 1, 0);
+
+  // ---- rasterise into cells of CS units ----
+  let minX = 1e9, minZ = 1e9, maxX = -1e9, maxZ = -1e9;
+  for (const sh of shapes) {
+    minX = Math.min(minX, sh.bbox[0]); minZ = Math.min(minZ, sh.bbox[1]); maxX = Math.max(maxX, sh.bbox[2]); maxZ = Math.max(maxZ, sh.bbox[3]);
+  }
+  const M = 5;
+  const ox = Math.floor((minX - M) / 4) * 4, oz = Math.floor((minZ - M) / 4) * 4;
+  const gw = Math.ceil((maxX + M - ox) / (CS * BLK)) * BLK, gh = Math.ceil((maxZ + M - oz) / (CS * BLK)) * BLK;
+  const grid = new Float32Array(gw * gh * 4);
+  let overlaps = 0;
+  for (const sh of shapes) {
+    const [bx0, bz0, bx1, bz1] = sh.bbox;
+    const i0 = Math.max(0, Math.floor((bx0 - ox) / CS)), i1 = Math.min(gw - 1, Math.ceil((bx1 - ox) / CS));
+    const j0 = Math.max(0, Math.floor((bz0 - oz) / CS)), j1 = Math.min(gh - 1, Math.ceil((bz1 - oz) / CS));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const X = ox + (i + 0.5) * CS, Z = oz + (j + 0.5) * CS;
+        const c = sh.at(X, Z);
+        if (!c) continue;
+        const o = (j * gw + i) * 4;
+        if (grid[o + 3] > 0) { if (!sh.fillOnly) overlaps++; continue; }
+        grid[o] = c[0]; grid[o + 1] = c[1]; grid[o + 2] = c[2]; grid[o + 3] = c[3];
+      }
+    }
+  }
+  const bw = gw / BLK, bh = gh / BLK, blk = new Float32Array(bw * bh).fill(-1e4);
+  let yMin = 1e9, yMax = -1e9;
+  for (let j = 0; j < gh; j++) {
+    for (let i = 0; i < gw; i++) {
+      const o = (j * gw + i) * 4;
+      if (grid[o + 3] < 0.5) continue;
+      // highest point of the (planar) cell
+      const top = grid[o] + (Math.abs(grid[o + 1]) + Math.abs(grid[o + 2])) * CS * 0.5;
+      const b = (j >> 3) * bw + (i >> 3);
+      blk[b] = Math.max(blk[b], top + 0.01);
+      yMin = Math.min(yMin, grid[o] - 1); yMax = Math.max(yMax, top);
+    }
+  }
+
+  // ---- centre line, resampled to 0.5 units ----
+  const cum = new Float64Array(raw.length);
+  for (let i = 1; i < raw.length; i++) cum[i] = cum[i - 1] + Math.hypot(raw[i].x - raw[i - 1].x, raw[i].z - raw[i - 1].z);
+  const Ltot = cum[raw.length - 1], DS = 0.5, n = Math.floor(Ltot / DS) + 1;
+  const path = { n, ds: DS, x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n),
+    tx: new Float32Array(n), tz: new Float32Array(n), nx: new Float32Array(n), nz: new Float32Array(n),
+    hw: new Float32Array(n), flag: new Uint8Array(n), vprof: new Float32Array(n), gapNear: new Uint8Array(n), s: new Float32Array(n) };
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    const s = i * DS;
+    while (j < raw.length - 2 && cum[j + 1] < s) j++;
+    const a = raw[j], b = raw[j + 1], f = Math.min(1, (s - cum[j]) / Math.max(cum[j + 1] - cum[j], 1e-9));
+    path.x[i] = a.x + (b.x - a.x) * f; path.y[i] = a.y + (b.y - a.y) * f; path.z[i] = a.z + (b.z - a.z) * f;
+    path.hw[i] = f < 0.5 ? a.hw : b.hw; path.flag[i] = a.flag | (f > 0.5 ? b.flag : 0); path.s[i] = s;
+  }
+  // a little smoothing gives the AI a racing line through the square corners
+  const sx = new Float32Array(n), sz = new Float32Array(n);
+  for (let it = 0; it < 6; it++) {
+    for (let i = 1; i < n - 1; i++) { sx[i] = 0.5 * path.x[i] + 0.25 * (path.x[i - 1] + path.x[i + 1]); sz[i] = 0.5 * path.z[i] + 0.25 * (path.z[i - 1] + path.z[i + 1]); }
+    for (let i = 1; i < n - 1; i++) { path.x[i] = sx[i]; path.z[i] = sz[i]; }
+  }
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1), dx = path.x[b] - path.x[a], dz = path.z[b] - path.z[a], l = Math.hypot(dx, dz) || 1;
+    path.tx[i] = dx / l; path.tz[i] = dz / l; path.nx[i] = -dz / l; path.nz[i] = dx / l;
+  }
+  const rawS = (ri) => cum[Math.min(ri, raw.length - 1)];
+  // AI speed profile: corners, narrow walks, ice; then a braking pass; then keep speed up for jumps
+  const v = path.vprof;
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - 3), b = Math.min(n - 1, i + 3);
+    const ang = Math.acos(Math.max(-1, Math.min(1, path.tx[a] * path.tx[b] + path.tz[a] * path.tz[b])));
+    const r = ang > 1e-4 ? (b - a) * DS / ang : 1e4;
+    let vi = Math.min(14.5, cornerSpeed(Math.max(r, 1.5)));
+    if (path.hw[i] < 1.6) vi = Math.min(vi, 7.5);
+    if (path.flag[i] & F_ICE) vi = Math.min(vi, 6.5);
+    v[i] = vi;
+  }
+  v[n - 1] = 0;
+  for (let i = n - 2; i >= 0; i--) {
+    const slope = (path.y[i] - path.y[i + 1]) / DS;
+    const dec = Math.max(2.5, 0.6 * ACCEL - GRAV * Math.max(0, slope));
+    v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * dec * DS));
+  }
+  for (let i = 0; i < n; i++) {
+    if (!(path.flag[i] & F_GAP)) continue;
+    for (let k = Math.max(0, i - 16); k <= Math.min(n - 1, i + 2); k++) path.gapNear[k] = 1;
+  }
+  const obstacles = obsDefs.map((o, id) => ({ ...o, id, s: rawS(o.raw), flash: 0 }));
+  const checks = checkRaw.map(rawS);
+  return { def, shapes, grid, gw, gh, ox, oz, blk, bw, bh, yMin, yMax, path, L: Ltot,
+    finishS: rawS(finishRaw), checks, obstacles, overlaps, theme: THEMES[def.theme] };
+}
+// @@COURSE-END
+
+// ---------------------------------------------------------------------------
+// Shaders
+// ---------------------------------------------------------------------------
+const VS = `#version 300 es
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const SIM_HEAD = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+out vec4 o;
+const float H = ${(WIN / SIM_N).toFixed(6)};
+const float WIN = ${WIN.toFixed(1)};
+ivec2 wr(ivec2 c) { return c & ivec2(${SIM_N - 1}); }
+`;
+
+const FS_ADVECT = SIM_HEAD + `
+uniform sampler2D uPrev;
+uniform vec2 uWinMin, uPrevWinMin;
+uniform vec4 uBalls[${NM}];
+uniform float uDt, uRefill;
+void main() {
+  ivec2 ij = ivec2(gl_FragCoord.xy);
+  vec2 s = (vec2(ij) + 0.5) * H;
+  vec2 k = ceil((uWinMin - s) / WIN);
+  vec2 kp = ceil((uPrevWinMin - s) / WIN);
+  vec2 pos = s + k * WIN;
+  vec4 st;
+  if (k != kp) {
+    st = vec4(0.0, 0.0, 1.0, 0.0);
+  } else {
+    vec2 v = texelFetch(uPrev, ij, 0).xy;
+    vec2 back = pos - v * uDt;
+    vec2 rel = back - uPrevWinMin;
+    if (any(lessThan(rel, vec2(0.0))) || any(greaterThan(rel, vec2(WIN)))) st = vec4(0.0, 0.0, 1.0, 0.0);
+    else st = texture(uPrev, back / WIN);
+    st.xy *= exp(-uDt / 1.6);
+    st.z += (1.0 - st.z) * (1.0 - exp(-uDt / uRefill));
+  }
+  const float R = ${BALL_R.toFixed(2)};
+  const float c = 2.3 * R;
+  for (int i = 0; i < ${NM}; i++) {
+    vec2 d = pos - uBalls[i].xy;
+    float r2 = dot(d, d);
+    if (r2 > 7.0) continue;
+    float r = sqrt(r2);
+    vec2 bv = uBalls[i].zw;
+    float wv = 1.0 - smoothstep(0.5 * R, 1.4 * R, r);
+    st.xy = mix(st.xy, bv, wv * min(1.0, uDt * 20.0));
+    st.z = mix(st.z, 0.0, (1.0 - smoothstep(0.5 * c, c, r)) * min(1.0, uDt * 12.0));
+    float sp = length(bv);
+    if (sp > 1e-3 && r > c) {
+      float ring = smoothstep(c, 1.15 * c, r) * (1.0 - smoothstep(1.55 * c, 1.9 * c, r));
+      float side = smoothstep(-0.35, 0.0, dot(d / r, bv / sp));
+      st.z += 0.12 * sp * uDt * ring * side;
+    }
+  }
+  st.z = clamp(st.z, 0.0, 1.6);
+  o = st;
+}`;
+
+// vorticity confinement, with the curl worked out in place (one pass instead of two)
+const FS_VORT = SIM_HEAD + `
+uniform sampler2D uV;
+uniform float uDt, uSwirl;
+vec2 vel(ivec2 c) { return texelFetch(uV, wr(c), 0).xy; }
+float curlAt(ivec2 c) {
+  return (vel(c + ivec2(1, 0)).y - vel(c - ivec2(1, 0)).y - (vel(c + ivec2(0, 1)).x - vel(c - ivec2(0, 1)).x)) / (2.0 * H);
+}
+void main() {
+  ivec2 ij = ivec2(gl_FragCoord.xy);
+  float L = abs(curlAt(ij - ivec2(1, 0)));
+  float R = abs(curlAt(ij + ivec2(1, 0)));
+  float B = abs(curlAt(ij - ivec2(0, 1)));
+  float T = abs(curlAt(ij + ivec2(0, 1)));
+  float C = curlAt(ij);
+  vec2 g = vec2(R - L, T - B);
+  vec2 N = g / (length(g) + 1e-5);
+  vec4 st = texelFetch(uV, ij, 0);
+  st.xy += uSwirl * 0.3 * C * vec2(N.y, -N.x) * uDt;
+  o = st;
+}`;
+
+// pressure solve; the divergence is computed in place (no separate pass)
+const FS_JACOBI = SIM_HEAD + `
+uniform sampler2D uP, uV;
+void main() {
+  ivec2 ij = ivec2(gl_FragCoord.xy);
+  float L = texelFetch(uP, wr(ij - ivec2(1, 0)), 0).x;
+  float R = texelFetch(uP, wr(ij + ivec2(1, 0)), 0).x;
+  float B = texelFetch(uP, wr(ij - ivec2(0, 1)), 0).x;
+  float T = texelFetch(uP, wr(ij + ivec2(0, 1)), 0).x;
+  float div = (texelFetch(uV, wr(ij + ivec2(1, 0)), 0).x - texelFetch(uV, wr(ij - ivec2(1, 0)), 0).x
+             + texelFetch(uV, wr(ij + ivec2(0, 1)), 0).y - texelFetch(uV, wr(ij - ivec2(0, 1)), 0).y) / (2.0 * H);
+  o = vec4((L + R + B + T - H * H * div) * 0.25, 0.0, 0.0, 1.0);
+}`;
+
+const FS_GRAD = SIM_HEAD + `
+uniform sampler2D uV, uP;
+void main() {
+  ivec2 ij = ivec2(gl_FragCoord.xy);
+  float L = texelFetch(uP, wr(ij - ivec2(1, 0)), 0).x;
+  float R = texelFetch(uP, wr(ij + ivec2(1, 0)), 0).x;
+  float B = texelFetch(uP, wr(ij - ivec2(0, 1)), 0).x;
+  float T = texelFetch(uP, wr(ij + ivec2(0, 1)), 0).x;
+  vec4 st = texelFetch(uV, ij, 0);
+  st.xy -= vec2(R - L, T - B) / (2.0 * H);
+  float sp = length(st.xy);
+  if (sp > 16.0) st.xy *= 16.0 / sp;
+  o = st;
+}`;
+
+const DBG = (QS.get('dbg') || '').split(',').filter(Boolean).map((d) => `#define DBG_${d.toUpperCase()}\n`).join('');
+const FS_RENDER = `#version 300 es
+${DBG}@@PASS@@precision highp float;
+precision highp int;
+precision highp sampler2D;
+precision highp sampler3D;
+#define NM ${NM}
+#define NB ${NB}
+#define NC ${NC}
+
+uniform sampler2D uGrid, uBlk, uMap, uFogRef;
+uniform sampler3D uNoise;
+uniform vec2 uGO;
+uniform ivec2 uGN, uBN;
+uniform float uYMax, uYMin;
+uniform vec2 uRes;
+uniform vec3 uCamPos, uCamF, uCamR, uCamU;
+uniform float uTanH, uTime, uJit, uExposure;
+uniform vec4 uMarb[NM];
+uniform vec3 uMarbF0[NM];
+uniform vec4 uBoxA[NB], uBoxB[NB];
+uniform vec4 uCylA[NC], uCylB[NC];
+uniform int uNB, uNC;
+uniform vec3 uSunDir, uSunCol, uAmb, uSkyTop, uSkyHor, uAbyss, uTileA, uTileB, uWall, uAccent, uRail;
+uniform float uNeon;
+uniform int uFogOn, uShowMap;
+uniform vec2 uAirShift, uWinMin, uWindDir, uFRO, uFRS;
+uniform float uHeight, uSigma, uFogHi, uFogLo;
+uniform vec3 uFogSun, uFogSky;
+uniform vec3 uWispPos[3];
+uniform vec3 uWispCol[3];
+uniform vec4 uFogMarb[4];          // the few marbles whose shadows cut beams through the fog
+uniform int uFogSteps;
+uniform int uSunShadow;
+uniform sampler2D uFogTex, uFogAux;
+uniform vec2 uFogRes;
+#ifdef FOG_PASS
+layout(location = 0) out vec4 outFog;   // in-scattered light, transmittance
+layout(location = 1) out vec4 outAux;   // hit distance, transmittance up to each wisp
+#else
+out vec4 outColor;
+#endif
+
+const float CS = ${CS.toFixed(2)};
+const float BW = ${(CS * BLK).toFixed(2)};
+const float BALL_R = ${BALL_R.toFixed(2)};
+const float WIN = ${WIN.toFixed(1)};
+float gPix;
+
+float sat(float x) { return clamp(x, 0.0, 1.0); }
+
+// ---- course: a 2D grid of planar-topped columns, traced with a two-level DDA ----
+struct Hit { float t; vec3 n; ivec2 c; vec4 d; };
+
+vec4 cellData(ivec2 c) {
+  if (c.x < 0 || c.y < 0 || c.x >= uGN.x || c.y >= uGN.y) return vec4(-1e4, 0.0, 0.0, 0.0);
+  return texelFetch(uGrid, c, 0);
+}
+float topAt(vec4 d, ivec2 c, vec2 xz) {
+  if (d.w < 0.5) return -1e4;
+  vec2 cc = uGO + (vec2(c) + 0.5) * CS;
+  return d.x + dot(d.yz, xz - cc);
+}
+
+bool traceTerrain(vec3 ro, vec3 rd, float tLim, out Hit h) {
+  h.t = 1e9; h.n = vec3(0.0, 1.0, 0.0); h.c = ivec2(0); h.d = vec4(0.0);
+  vec2 rdxz = vec2(abs(rd.x) < 1e-5 ? 1e-5 : rd.x, abs(rd.z) < 1e-5 ? 1e-5 : rd.z);
+  vec2 ird = 1.0 / rdxz;
+  vec2 ta = (uGO - ro.xz) * ird, tb = (uGO + vec2(uGN) * CS - ro.xz) * ird;
+  vec2 tn = min(ta, tb), tf = max(ta, tb);
+  float tA = max(max(tn.x, tn.y), 0.0);
+  float tB = min(min(tf.x, tf.y), tLim);
+  if (rd.y < 0.0) {
+    tA = max(tA, (uYMax - ro.y) / rd.y);
+    tB = min(tB, (uYMin - 40.0 - ro.y) / rd.y);
+  } else {
+    if (ro.y > uYMax) return false;
+    tB = min(tB, (uYMax - ro.y) / max(rd.y, 1e-5));
+  }
+  if (tA >= tB) return false;
+  ivec2 st = ivec2(rdxz.x > 0.0 ? 1 : -1, rdxz.y > 0.0 ? 1 : -1);
+  vec2 stf = vec2(st), stp = max(stf, 0.0);
+  vec2 p0 = ro.xz + rd.xz * tA;
+  ivec2 b = clamp(ivec2(floor((p0 - uGO) / BW)), ivec2(0), uBN - 1);
+  vec2 bMax = (uGO + (vec2(b) + stp) * BW - ro.xz) * ird;
+  vec2 bDel = abs(BW * ird), cDel = abs(CS * ird);
+  float t0 = tA;
+  int axis = -1;
+  for (int k = 0; k < 80; k++) {
+    float t1 = min(min(bMax.x, bMax.y), tB);
+    float bm = texelFetch(uBlk, b, 0).x;
+    float yLow = ro.y + rd.y * (rd.y < 0.0 ? t1 : t0);
+    if (yLow <= bm) {
+      vec2 q = ro.xz + rd.xz * (t0 + 1e-4);
+      ivec2 c = clamp(ivec2(floor((q - uGO) / CS)), b * 8, b * 8 + 7);
+      vec2 cMax = (uGO + (vec2(c) + stp) * CS - ro.xz) * ird;
+      float c0 = t0;
+      int ax = axis;
+      for (int j = 0; j < 20; j++) {
+        float c1 = min(min(cMax.x, cMax.y), t1);
+        vec4 d = texelFetch(uGrid, c, 0);
+        if (d.w > 0.5) {
+          vec2 cc = uGO + (vec2(c) + 0.5) * CS;
+          vec3 q0 = ro + rd * c0;
+          float s0 = d.x + dot(d.yz, q0.xz - cc);
+          if (q0.y < s0 - 0.03) {
+            h.t = c0; h.c = c; h.d = d;
+            h.n = ax == 0 ? vec3(-stf.x, 0.0, 0.0) : (ax == 1 ? vec3(0.0, 0.0, -stf.y) : vec3(0.0, 1.0, 0.0));
+            return true;
+          }
+          if (q0.y < s0) { h.t = c0; h.c = c; h.d = d; h.n = normalize(vec3(-d.y, 1.0, -d.z)); return true; }
+          float den = rd.y - dot(d.yz, rd.xz);
+          if (den < 0.0) {
+            float tp = c0 + (s0 - q0.y) / den;
+            if (tp <= c1) { h.t = tp; h.c = c; h.d = d; h.n = normalize(vec3(-d.y, 1.0, -d.z)); return true; }
+          }
+        }
+        if (c1 >= t1) break;
+        c0 = c1;
+        if (cMax.x < cMax.y) { c.x += st.x; cMax.x += cDel.x; ax = 0; }
+        else { c.y += st.y; cMax.y += cDel.y; ax = 1; }
+      }
+    }
+    if (t1 >= tB) break;
+    t0 = t1;
+    if (bMax.x < bMax.y) { b.x += st.x; bMax.x += bDel.x; axis = 0; }
+    else { b.y += st.y; bMax.y += bDel.y; axis = 1; }
+    if (b.x < 0 || b.y < 0 || b.x >= uBN.x || b.y >= uBN.y) break;
+  }
+  return false;
+}
+
+// ---- marbles and obstacles (analytic) ----
+float sphIntersect(vec3 ro, vec3 rd, vec4 s) {
+  vec3 oc = ro - s.xyz;
+  float b = dot(oc, rd);
+  float c = dot(oc, oc) - s.w * s.w;
+  float h = b * b - c;
+  if (h < 0.0) return -1.0;
+  return -b - sqrt(h);
+}
+float sphSoftShadow(vec3 ro, vec3 rd, vec4 s, float k) {
+  vec3 oc = ro - s.xyz;
+  float b = dot(oc, rd);
+  float c = dot(oc, oc) - s.w * s.w;
+  float h = b * b - c;
+  float d = sqrt(max(0.0, s.w * s.w - h)) - s.w;
+  float t = -b - sqrt(max(h, 0.0));
+  return (t < 0.0) ? 1.0 : smoothstep(0.0, 1.0, 2.5 * k * d / t);
+}
+float boxHit(vec3 ro, vec3 rd, int i, out vec3 nW) {
+  vec4 A = uBoxA[i], B = uBoxB[i];
+  float cs = cos(A.w), sn = sin(A.w);
+  vec3 o = ro - A.xyz;
+  vec3 lo = vec3(o.x * cs + o.z * sn, o.y, -o.x * sn + o.z * cs);
+  vec3 ld = vec3(rd.x * cs + rd.z * sn, rd.y, -rd.x * sn + rd.z * cs);
+  ld = vec3(abs(ld.x) < 1e-6 ? 1e-6 : ld.x, abs(ld.y) < 1e-6 ? 1e-6 : ld.y, abs(ld.z) < 1e-6 ? 1e-6 : ld.z);
+  vec3 m = 1.0 / ld;
+  vec3 nn = m * lo;
+  vec3 k = abs(m) * B.xyz;
+  vec3 t1 = -nn - k, t2 = -nn + k;
+  float tN = max(max(t1.x, t1.y), t1.z);
+  float tF = min(min(t2.x, t2.y), t2.z);
+  nW = vec3(0.0, 1.0, 0.0);
+  if (tN > tF || tN < 0.0) return -1.0;
+  vec3 ln = -sign(ld) * step(t1.yzx, t1.xyz) * step(t1.zxy, t1.xyz);
+  nW = vec3(ln.x * cs - ln.z * sn, ln.y, ln.x * sn + ln.z * cs);
+  return tN;
+}
+float cylHit(vec3 ro, vec3 rd, int i, out vec3 n) {
+  vec4 A = uCylA[i], B = uCylB[i];
+  vec2 oc = ro.xz - A.xy;
+  float a = dot(rd.xz, rd.xz), b = dot(oc, rd.xz), c = dot(oc, oc) - A.z * A.z;
+  float tb = -1.0;
+  n = vec3(0.0, 1.0, 0.0);
+  float h = b * b - a * c;
+  if (h >= 0.0 && a > 1e-9) {
+    float t = (-b - sqrt(h)) / a;
+    float y = ro.y + rd.y * t;
+    if (t > 0.0 && y > B.x && y < B.y) { tb = t; vec2 q = oc + rd.xz * t; n = vec3(q.x, 0.0, q.y) / A.z; }
+  }
+  if (rd.y < 0.0) {
+    float t = (B.y - ro.y) / rd.y;
+    vec2 q = oc + rd.xz * t;
+    if (t > 0.0 && dot(q, q) < A.z * A.z && (tb < 0.0 || t < tb)) { tb = t; n = vec3(0.0, 1.0, 0.0); }
+  }
+  return tb;
+}
+float obstacleHit(vec3 ro, vec3 rd, out int id, out int isBox, out vec3 n) {
+  float tb = 1e9; id = -1; isBox = 0; n = vec3(0.0, 1.0, 0.0);
+  vec3 nn;
+  for (int i = 0; i < NB; i++) {
+    if (i >= uNB) break;
+    float t = boxHit(ro, rd, i, nn);
+    if (t > 0.0 && t < tb) { tb = t; id = i; isBox = 1; n = nn; }
+  }
+  for (int i = 0; i < NC; i++) {
+    if (i >= uNC) break;
+    float t = cylHit(ro, rd, i, nn);
+    if (t > 0.0 && t < tb) { tb = t; id = i; isBox = 0; n = nn; }
+  }
+  return tb;
+}
+float obstacleShadow(vec3 p, vec3 L) {
+  vec3 nn;
+  for (int i = 0; i < NB; i++) {
+    if (i >= uNB) break;
+    vec2 dd = uBoxA[i].xz - p.xz;
+    if (dot(dd, dd) > 40.0) continue;
+    if (boxHit(p, L, i, nn) > 0.0) return 0.0;
+  }
+  for (int i = 0; i < NC; i++) {
+    if (i >= uNC) break;
+    vec2 dd = uCylA[i].xy - p.xz;
+    if (dot(dd, dd) > 40.0) continue;
+    if (cylHit(p, L, i, nn) > 0.0) return 0.0;
+  }
+  return 1.0;
+}
+float marbleShadow(vec3 p) {
+  float s = 1.0;
+  for (int i = 0; i < NM; i++) {
+    if (uMarb[i].w < 0.5) continue;
+    vec3 d = uMarb[i].xyz - p;
+    if (d.y < -0.7 || dot(d, d) > 30.0) continue;
+    s *= sphSoftShadow(p, uSunDir, vec4(uMarb[i].xyz, BALL_R), 4.0);
+  }
+  return s;
+}
+float contactAO(vec3 p, vec3 n) {
+  float ao = 1.0;
+  for (int i = 0; i < NM; i++) {
+    if (uMarb[i].w < 0.5) continue;
+    vec3 d = uMarb[i].xyz - p;
+    float l2 = dot(d, d);
+    if (l2 > 4.0) continue;
+    ao *= 1.0 - sat(dot(n, d) * inversesqrt(l2)) * BALL_R * BALL_R / l2 * 0.9;
+  }
+  return clamp(ao, 0.0, 1.0);
+}
+
+// ---- sky and the void below ----
+vec3 skyCol(vec3 d) {
+  vec3 c = mix(uSkyHor, uSkyTop, sqrt(max(d.y, 0.0)));
+  float mu = sat(dot(d, uSunDir));
+  c += uSunCol * (pow(mu, 1500.0) * 5.0 + pow(mu, 50.0) * 0.12);
+  if (d.y < 0.0) c = mix(uSkyHor, uAbyss, sat(-d.y * 4.0));
+  return c;
+}
+vec3 background(vec3 ro, vec3 rd) {
+  if (rd.y > -0.02) return skyCol(rd);
+  float t = (uYMin - 70.0 - ro.y) / rd.y;
+  vec3 p = ro + rd * t;
+  vec2 g = abs(fract(p.xz / 8.0 + 0.5) - 0.5) * 8.0;
+  float aa = t * gPix * 1.5;
+  float line = 1.0 - smoothstep(0.0, 0.06 + aa, min(g.x, g.y));
+  vec3 c = uAbyss * (0.85 + 0.25 * line) + uAccent * line * 0.08 * uNeon;
+  return mix(uAbyss, c, exp(-t * 0.012));
+}
+
+float checker(vec2 p, vec2 w) {
+  w = max(w, vec2(1e-4));
+  vec2 i = 2.0 * (abs(fract((p - 0.5 * w) * 0.5) - 0.5) - abs(fract((p + 0.5 * w) * 0.5) - 0.5)) / w;
+  return 0.5 - 0.5 * i.x * i.y;
+}
+
+// ---- fog (only on misty courses): the density map rides on a smoothed copy of the course height ----
+float fogRef(vec2 xz) { return textureLod(uFogRef, (xz - uFRO) / uFRS, 0.0).r; }
+vec3 mapAt(vec2 xz) {
+  vec2 air = xz - uAirShift;
+  vec2 rel = air - uWinMin;
+  vec2 e = min(rel, WIN - rel);
+  float inside = smoothstep(0.0, 3.0, min(e.x, e.y));
+  if (inside <= 0.0) return vec3(0.0, 0.0, 1.0);
+  vec3 m = textureLod(uMap, air / WIN, 0.0).rgb;
+  return mix(vec3(0.0, 0.0, 1.0), m, inside);
+}
+vec4 columnAt(vec2 xz, float lod, out vec2 air) {
+  vec3 m = mapAt(xz);
+  air = xz - uAirShift - m.xy * 0.35;
+  vec3 broad = textureLod(uNoise, vec3(air.x * 0.7, uTime * 0.004, air.y * 0.7) / 18.0, max(lod - 0.5, 0.0)).gba;
+  float top = uHeight * m.z * (0.55 + 0.7 * broad.z);
+  return vec4(broad.xy, top, m.z);
+}
+float densityAt(vec3 p, vec2 air, vec4 col, float lod) {
+  vec2 s = vec2(dot(air, uWindDir) * 0.6, dot(air, vec2(-uWindDir.y, uWindDir.x)));
+  vec3 q = vec3(s.x, p.y * 1.3 - uTime * 0.18, s.y) / 18.0;
+  q.xz += (col.xy - 0.5) * 0.9;
+  float n = textureLod(uNoise, q, max(lod, 0.0)).r;
+  float fine = textureLod(uNoise, q * 3.1 + vec3(0.0, uTime * 0.012, 0.0), max(lod + 1.63, 0.0)).r;
+  float shape = (col.z - p.y) / 0.85 + (n - 0.5) * 1.6 + (fine - 0.5) * 0.7;
+  return sat(shape) * smoothstep(0.2, 0.8, 0.8 * n + 0.2 * fine) * sat(col.w * 3.0);
+}
+float phaseFn(float mu) {
+  const float g = 0.55;
+  float hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * mu, 1.5);
+  return 0.5 * hg + 0.5;
+}
+float fogMarbleShadow(vec3 p) {
+  float s = 1.0;
+  for (int i = 0; i < 4; i++) {
+    if (uFogMarb[i].w < 0.5) continue;
+    vec3 d = uFogMarb[i].xyz - p;
+    if (d.y < -0.7 || dot(d, d) > 30.0) continue;
+    s *= sphSoftShadow(p, uSunDir, vec4(uFogMarb[i].xyz, BALL_R), 4.0);
+  }
+  return s;
+}
+vec3 fogLight(vec3 q, float ay, vec2 air, vec4 col, float lod, float phase) {
+  float depth = max(col.z - q.y, 0.0);
+  float d2 = densityAt(q + uSunDir * 0.4, air + uSunDir.xz * 0.4, col, lod);
+  float tau = (d2 * 0.4 + depth * 0.75 / max(uSunDir.y, 0.25)) * uSigma;
+  float beam = 0.7 * exp(-tau) + 0.3 * exp(-tau * 0.25);
+#ifdef DBG_NOFOGSHADOW
+  vec3 L = uFogSun * beam * phase;
+#else
+  vec3 L = uFogSun * beam * phase * fogMarbleShadow(vec3(q.x, ay, q.z));
+#endif
+  L += uFogSky * (0.2 + 0.8 * exp(-depth * 1.5));
+  for (int i = 0; i < 3; i++) {
+    vec3 d = uWispPos[i] - vec3(q.x, ay, q.z);
+    L += uWispCol[i] / (0.12 + dot(d, d) * 3.0);
+  }
+  return L;
+}
+void fogStep(vec3 p, float dt, float lod, float phase, inout vec3 scat, inout float T) {
+  float ref = fogRef(p.xz);
+  vec3 q = vec3(p.x, p.y - ref, p.z);
+  vec2 air;
+  vec4 c = columnAt(p.xz, lod, air);
+  if (q.y > c.z + 1.0) return;
+  float d = densityAt(q, air, c, lod);
+  if (d < 0.002) return;
+  float a = 1.0 - exp(-d * uSigma * dt);
+  scat += T * a * fogLight(q, p.y, air, c, lod, phase);
+  T *= 1.0 - a;
+}
+float wispGlow(float d2) { return 2.5 * exp(-d2 / 0.00015) + 0.02 / (d2 + 0.012); }
+
+// ---- surfaces ----
+vec3 shadeTerrain(vec3 p, vec3 rd, Hit h, float t, bool cheap) {
+  vec3 n = h.n;
+  int mat = int(h.d.w + 0.5);
+  bool top = n.y > 0.5;
+  float aa = clamp(t * gPix / max(abs(dot(n, rd)), 0.3), 0.001, 0.6);
+  float topY = topAt(h.d, h.c, p.xz);
+  vec3 alb, emis = vec3(0.0);
+  float gloss = 0.0, ao = 1.0, rim = 0.0;
+  if (top) {
+    float ch = checker(p.xz, vec2(aa));
+    alb = mix(uTileB, uTileA, ch);
+    if (length(h.d.yz) > 0.02) alb = alb * 1.08 + uAccent * 0.04;
+    vec2 gd = abs(fract(p.xz + 0.5) - 0.5);
+    float grout = 1.0 - smoothstep(0.012, 0.012 + aa, min(gd.x, gd.y));
+    if (mat == 2) { alb = uRail; emis = uRail * 0.12; grout = 0.0; }
+    else if (mat == 3) { alb = mix(vec3(0.55, 0.78, 0.95), vec3(0.78, 0.92, 1.0), ch); gloss = 0.45; }
+    else if (mat == 5) { alb = mix(alb, vec3(0.95), 0.3); }
+    else if (mat == 6) { float c2 = checker(p.xz * 2.0, vec2(aa) * 2.0); alb = mix(vec3(0.03), vec3(0.92), c2); grout = 0.0; }
+    else if (mat >= 10) {
+      int di = mat - 10;
+      vec2 dir = di == 0 ? vec2(1.0, 0.0) : di == 1 ? vec2(0.0, 1.0) : di == 2 ? vec2(-1.0, 0.0) : vec2(0.0, -1.0);
+      float u = dot(p.xz, dir), v = dot(p.xz, vec2(-dir.y, dir.x));
+      float ch2 = fract(u * 0.7 - abs(fract(v * 0.5) - 0.5) * 1.1 - uTime * 1.6);
+      float arrow = smoothstep(0.0, 0.08 + aa, ch2) * (1.0 - smoothstep(0.32, 0.4 + aa, ch2));
+      alb = mix(alb * 0.45, uAccent, arrow);
+      emis = uAccent * arrow * 0.5;
+    }
+    alb *= 1.0 - 0.22 * grout;
+    emis += uAccent * grout * 0.25 * uNeon;
+    // drop edges get a bright lip, walls rising beside us a little occlusion
+    vec2 cc = uGO + (vec2(h.c) + 0.5) * CS;
+    vec2 lp = p.xz - cc;
+    for (int k = 0; k < 4; k++) {
+      ivec2 o = k == 0 ? ivec2(1, 0) : k == 1 ? ivec2(-1, 0) : k == 2 ? ivec2(0, 1) : ivec2(0, -1);
+      vec2 of = vec2(o);
+      float dist = CS * 0.5 - dot(lp, of);
+      vec2 ep = p.xz + of * dist;
+      float mine = topAt(h.d, h.c, ep);
+      ivec2 nc = h.c + o;
+      float theirs = topAt(cellData(nc), nc, ep);
+      float dh = theirs - mine;
+      if (dh < -0.15) rim = max(rim, 1.0 - smoothstep(0.0, 0.05 + aa, dist));
+      else if (dh > 0.15) ao *= 1.0 - 0.5 * exp(-dist * 6.0) * sat(dh);
+    }
+    if (uShowMap == 1 && uFogOn == 1) {
+      vec3 m = mapAt(p.xz);
+      alb = mix(vec3(0.02, 0.025, 0.04), vec3(0.80, 0.83, 0.88), sat(m.z / 1.25));
+      alb = mix(alb, vec3(1.0, 0.42, 0.08), sat(length(m.xy) / 2.0) * 0.85) * (0.85 + 0.15 * ch);
+      return alb;
+    }
+  } else {
+    float depth = max(topY - p.y, 0.0);
+    alb = mat == 2 ? uRail * 0.75 : uWall;
+    float fb = fract(depth);
+    float band = (1.0 - smoothstep(0.0, 0.025 + aa, min(fb, 1.0 - fb))) * step(0.5, depth);
+    float along = abs(n.x) > 0.5 ? p.z : p.x;
+    float fa = abs(fract(along + 0.5) - 0.5);
+    float seam = 1.0 - smoothstep(0.01, 0.01 + aa, fa);
+    alb *= 1.0 - 0.25 * band - 0.15 * seam;
+    emis += uAccent * (band + seam) * 0.18 * uNeon * exp(-depth * 0.2);
+    rim = 1.0 - smoothstep(0.0, 0.04 + aa, depth);
+  }
+  float nl = dot(n, uSunDir);
+  float sh = 0.0;
+  if (nl > 0.0) {
+    sh = 1.0;
+    if (!cheap) {
+      Hit hs;
+#ifndef DBG_NOSHADOW
+      if (uSunShadow == 1 && traceTerrain(p + n * 0.01 + uSunDir * 0.02, uSunDir, 60.0, hs)) sh = 0.0;
+      else
+#endif
+      sh = obstacleShadow(p + n * 0.01, uSunDir) * marbleShadow(p);
+    }
+  }
+  float cao = cheap ? 1.0 : contactAO(p, n);
+  vec3 L = uSunCol * max(nl, 0.0) * sh + uAmb * (0.6 + 0.4 * n.y) * ao * cao;
+  vec3 col = alb * L + emis + uAccent * rim * 0.45;
+  vec3 rr = reflect(rd, n);
+  float fr = 0.04 + 0.96 * pow(1.0 - sat(dot(-rd, n)), 5.0);
+  col += skyCol(rr) * fr * gloss;
+  col += uSunCol * pow(sat(dot(rr, uSunDir)), 64.0) * (0.05 + gloss) * sh;
+  if (!top) col = mix(col, uAbyss, 1.0 - exp(-max(topY - p.y, 0.0) * 0.09));
+  return col;
+}
+
+vec3 shadeObstacle(vec3 p, vec3 n, int isBox, int id, vec3 rd, bool cheap) {
+  vec3 alb, emis = vec3(0.0);
+  const vec3 HAZ = vec3(1.0, 0.76, 0.08);
+  if (isBox == 1) {
+    vec4 A = uBoxA[id], B = uBoxB[id];
+    int kind = int(B.w + 0.5);
+    float cs = cos(A.w), sn = sin(A.w);
+    vec3 o = p - A.xyz;
+    vec3 lp = vec3(o.x * cs + o.z * sn, o.y, -o.x * sn + o.z * cs);
+    float stripe = step(0.5, fract((lp.x + lp.z + lp.y) * 1.6));
+    if (kind == 0) alb = mix(vec3(0.04), HAZ, stripe);
+    else if (kind == 1) { alb = vec3(1.0, 0.40, 0.10); if (abs(lp.y) < 0.09) alb = vec3(0.95); }
+    else {
+      alb = vec3(0.45, 0.48, 0.54);
+      if (lp.y < -B.y + 0.28) alb = mix(vec3(0.04), HAZ, stripe);
+      if (n.y < -0.5) alb = vec3(0.1);
+    }
+  } else {
+    vec4 A = uCylA[id], B = uCylB[id];
+    int kind = int(A.w + 0.5);
+    if (kind == 0) {
+      alb = vec3(0.95, 0.16, 0.30);
+      if (n.y > 0.5) {
+        float r = length(p.xz - A.xy) / A.z;
+        alb = r < 0.55 ? vec3(1.0) : alb;
+        emis = vec3(1.0, 0.5, 0.6) * (r < 0.55 ? 0.15 : 0.0);
+      } else if (B.y - p.y < 0.16) alb = vec3(1.0);
+      emis += vec3(1.0, 0.35, 0.5) * B.z * 1.6;
+    } else alb = vec3(0.22, 0.24, 0.28);
+  }
+  float nl = dot(n, uSunDir);
+  float sh = nl > 0.0 ? 1.0 : 0.0;
+  if (!cheap && nl > 0.0) sh = marbleShadow(p);
+  vec3 col = alb * (uSunCol * max(nl, 0.0) * sh + uAmb * (0.65 + 0.35 * n.y)) + emis;
+  vec3 rr = reflect(rd, n);
+  col += uSunCol * pow(sat(dot(rr, uSunDir)), 40.0) * 0.25 * sh;
+  col += skyCol(rr) * 0.06;
+  return col;
+}
+
+vec3 shadeMarble(vec3 p, vec3 rd, int idx) {
+  vec3 ctr = uMarb[idx].xyz;
+  vec3 n = normalize(p - ctr);
+  vec3 r = reflect(rd, n);
+  vec3 q0 = p + n * 0.01;
+  float tm = 1e9; int jm = -1;
+  for (int j = 0; j < NM; j++) {
+    if (j == idx || uMarb[j].w < 0.5) continue;
+    float t = sphIntersect(q0, r, vec4(uMarb[j].xyz, BALL_R));
+    if (t > 0.0 && t < tm) { tm = t; jm = j; }
+  }
+  Hit hr;
+  bool ht = traceTerrain(q0, r, 80.0, hr);
+  float tt = ht ? hr.t : 1e9;
+  int oid, obox; vec3 on;
+  float to = obstacleHit(q0, r, oid, obox, on);
+  vec3 rc;
+  if (jm >= 0 && tm < tt && tm < to) {
+    vec3 q = q0 + r * tm;
+    vec3 nq = normalize(q - uMarb[jm].xyz);
+    rc = uMarbF0[jm] * (skyCol(reflect(r, nq)) * 1.2 + 0.05);
+  } else if (oid >= 0 && to < tt) {
+    rc = shadeObstacle(q0 + r * to, on, obox, oid, r, true);
+  } else if (ht) {
+    rc = shadeTerrain(q0 + r * tt, r, hr, tt + 20.0, true);
+  } else {
+    rc = background(q0, r);
+  }
+  float cosi = sat(dot(-rd, n));
+  vec3 F0 = uMarbF0[idx];
+  vec3 F = F0 + (1.0 - F0) * pow(1.0 - cosi, 5.0);
+  vec3 c = rc * F + F0 * uAmb * 0.08;
+  c += uSunCol * pow(sat(dot(r, uSunDir)), 700.0) * 7.0;
+  if (uFogOn == 1) {
+    for (int i = 0; i < 3; i++) {
+      vec3 dw = uWispPos[i] - p;
+      float tw = dot(dw, r);
+      if (tw > 0.0) { vec3 cp = dw - r * tw; c += uWispCol[i] * wispGlow(dot(cp, cp)) * F; }
+    }
+  }
+  return c;
+}
+
+vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+
+void main() {
+  vec2 fc = gl_FragCoord.xy;
+  vec2 uv = (2.0 * fc - uRes) / uRes.y;
+  vec3 ro = uCamPos;
+  vec3 rd = normalize(uCamF + (uCamR * uv.x + uCamU * uv.y) * uTanH);
+  gPix = 2.0 * uTanH / uRes.y;
+  float ign = fract(52.9829189 * fract(dot(fc, vec2(0.06711056, 0.00583715))));
+
+  Hit th;
+  bool hasT = traceTerrain(ro, rd, 600.0, th);
+  float tT = hasT ? th.t : 1e9;
+  int hm = -1; float tM = 1e9;
+  for (int i = 0; i < NM; i++) {
+    if (uMarb[i].w < 0.5) continue;
+    float t = sphIntersect(ro, rd, vec4(uMarb[i].xyz, BALL_R));
+    if (t > 0.0 && t < tM) { tM = t; hm = i; }
+  }
+  int oid, obox; vec3 on;
+  float tO = obstacleHit(ro, rd, oid, obox, on);
+  float tHit = min(tT, min(tM, tO));
+
+#ifdef FOG_PASS
+  // fog at reduced resolution: march it, keep the hit distance for a depth-aware upsample
+  float T = 1.0;
+  vec3 scat = vec3(0.0);
+  float tw[3];
+  float Tw[3];
+  for (int k = 0; k < 3; k++) { tw[k] = dot(uWispPos[k] - ro, rd); Tw[k] = 1.0; }
+  if (rd.y < -0.01) {
+    float t0 = max((uFogHi - ro.y) / rd.y, 0.0);
+    float t1 = min(tHit, (uFogLo - ro.y) / rd.y);
+    if (t1 > t0) {
+      float dt = (t1 - t0) / float(uFogSteps);
+      float j = fract(ign + uJit);
+      float phase = phaseFn(dot(rd, uSunDir));
+      for (int i = 0; i < 64; i++) {
+        if (i >= uFogSteps) break;
+        float t = t0 + (float(i) + j) * dt;
+        float lod = log2(t * gPix / 0.28);
+        fogStep(ro + rd * t, dt, lod, phase, scat, T);
+        for (int k = 0; k < 3; k++) if (t < tw[k]) Tw[k] = T;
+        if (T < 0.004) break;
+      }
+    }
+  }
+  outFog = vec4(scat, T);
+  outAux = vec4(min(tHit, 1e4), Tw[0], Tw[1], Tw[2]);
+#else
+  vec3 col;
+  bool raw = false;
+  if (hm >= 0 && tM < tT && tM < tO) col = shadeMarble(ro + rd * tM, rd, hm);
+  else if (oid >= 0 && tO < tT) col = shadeObstacle(ro + rd * tO, on, obox, oid, rd, false);
+  else if (hasT) { col = shadeTerrain(ro + rd * tT, rd, th, tT, false); raw = uShowMap == 1 && uFogOn == 1 && th.n.y > 0.5; }
+  else col = background(ro, rd);
+
+  if (uFogOn == 1 && uShowMap == 0 && rd.y < -0.01) {
+    // depth-aware upsample: low-res fog texels at a different depth (another surface) get little weight
+    vec2 fp = fc / uRes * uFogRes - 0.5;
+    ivec2 f0 = ivec2(floor(fp));
+    vec2 fr = fp - vec2(f0);
+    ivec2 fmax = ivec2(uFogRes) - 1;
+    float d0 = min(tHit, 1e4);
+    vec4 fs = vec4(0.0), as = vec4(0.0);
+    float ws = 0.0, bestD = 1e9;
+    vec4 bf = vec4(0.0, 0.0, 0.0, 1.0), ba = vec4(0.0, 1.0, 1.0, 1.0);
+    for (int k = 0; k < 4; k++) {
+      ivec2 o = ivec2(k & 1, k >> 1);
+      ivec2 c = clamp(f0 + o, ivec2(0), fmax);
+      vec4 f = texelFetch(uFogTex, c, 0), a = texelFetch(uFogAux, c, 0);
+      float bw = (o.x == 1 ? fr.x : 1.0 - fr.x) * (o.y == 1 ? fr.y : 1.0 - fr.y);
+      float dd = abs(a.x - d0) / max(d0, 1.0);
+      float w = bw * exp(-dd * 30.0);
+      fs += f * w; as += a * w; ws += w;
+      if (dd < bestD) { bestD = dd; bf = f; ba = a; }
+    }
+    vec4 fog = ws > 1e-4 ? fs / ws : bf;
+    vec3 Tw = ws > 1e-4 ? as.yzw / ws : ba.yzw;
+    col = col * fog.a + fog.rgb;
+    float dBall = hm >= 0 && tM < tT ? dot(uMarb[hm].xyz - ro, rd) : 1e9;
+    for (int k = 0; k < 3; k++) {
+      float twk = dot(uWispPos[k] - ro, rd);
+      if (twk <= 0.0 || twk > tHit + 0.5) continue;
+      vec3 cp = ro + rd * twk - uWispPos[k];
+      float fade = smoothstep(0.3, -0.3, twk - dBall);
+      col += uWispCol[k] * wispGlow(dot(cp, cp)) * Tw[k] * (dBall < 1e8 ? fade : 1.0);
+    }
+  }
+
+  vec3 o = raw ? col : aces(col * uExposure);
+  o = pow(o, vec3(1.0 / 2.2)) + (ign - 0.5) / 255.0;
+  outColor = vec4(o, 1.0);
+#endif
+}`;
+
+// ---------------------------------------------------------------------------
+// Programs (parallel compile: never block on status queries)
+// ---------------------------------------------------------------------------
+const programs = [];
+const vsObj = gl.createShader(gl.VERTEX_SHADER);
+gl.shaderSource(vsObj, VS); gl.compileShader(vsObj);
+function program(name, fsSrc) {
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, fsSrc); gl.compileShader(fs);
+  const p = gl.createProgram();
+  gl.attachShader(p, vsObj); gl.attachShader(p, fs); gl.linkProgram(p);
+  const o = { name, p, fs, u: new Map() };
+  programs.push(o);
+  return o;
+}
+const PR = {
+  advect: program('advect', FS_ADVECT), vort: program('vorticity', FS_VORT),
+  jacobi: program('jacobi', FS_JACOBI), grad: program('gradient', FS_GRAD),
+  render: program('render', FS_RENDER.replace('@@PASS@@', '')),
+  fog: program('fog', FS_RENDER.replace('@@PASS@@', '#define FOG_PASS\n')),
+};
+let progState = 'compiling';
+// GPU time per frame, read back a few frames late (never stalls)
+const tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+const gpuPending = [];
+function gpuBegin(key = 'all') {
+  if (!tq || gpuPending.length >= 30) return null;
+  const q = gl.createQuery();
+  gl.beginQuery(tq.TIME_ELAPSED_EXT, q);
+  q.key = key;
+  return q;
+}
+function gpuEnd(q) { if (q) { gl.endQuery(tq.TIME_ELAPSED_EXT); gpuPending.push(q); } }
+function gpuPoll() {
+  if (!tq) return;
+  const disjoint = gl.getParameter(tq.GPU_DISJOINT_EXT);
+  while (gpuPending.length && gl.getQueryParameter(gpuPending[0], gl.QUERY_RESULT_AVAILABLE)) {
+    const q = gpuPending.shift(), ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;
+    gl.deleteQuery(q);
+    if (disjoint || !(ms > 0)) continue;
+    if (q.key !== 'all') { perf.sec['gpu_' + q.key] = (perf.sec['gpu_' + q.key] || 0) + ms; perf.sec['n_' + q.key] = (perf.sec['n_' + q.key] || 0) + 1; continue; }
+    perf.gpu += ms; perf.gpuN++;
+    perf.gpuEma = perf.gpuEma ? perf.gpuEma + (ms - perf.gpuEma) * 0.15 : ms;
+  }
+}
+function pollPrograms() {
+  if (parallel && !programs.every((o) => gl.getProgramParameter(o.p, parallel.COMPLETION_STATUS_KHR))) return;
+  for (const o of programs) {
+    if (!gl.getProgramParameter(o.p, gl.LINK_STATUS)) {
+      console.error(o.name, gl.getShaderInfoLog(o.fs), gl.getShaderInfoLog(vsObj), gl.getProgramInfoLog(o.p));
+      progState = 'failed';
+      fail(`The ${o.name} shader failed to compile (see console).`);
+      return;
+    }
+  }
+  progState = 'ready';
+}
+const U = (o, n) => {
+  let l = o.u.get(n);
+  if (l === undefined) { l = gl.getUniformLocation(o.p, n); o.u.set(n, l); }
+  return l;
+};
+
+// ---------------------------------------------------------------------------
+// Fog simulation targets
+// ---------------------------------------------------------------------------
+function makeTarget() {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, SIM_N, SIM_N);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('fbo');
+  return { t, fb };
+}
+let stateCur, stateTmp, presA, presB;
+try {
+  stateCur = makeTarget(); stateTmp = makeTarget();
+  presA = makeTarget(); presB = makeTarget();
+} catch (e) { fail('This GPU cannot render to half-float textures.'); return; }
+let prevWinMin = null;
+function resetFog() {
+  for (const s of [stateCur, stateTmp]) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, s.fb);
+    gl.clearColor(0, 0, 1, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+  for (const s of [presA, presB]) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, s.fb);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  prevWinMin = null;
+}
+gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+gl.bindVertexArray(gl.createVertexArray());
+const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
+
+// ---------------------------------------------------------------------------
+// 3D noise for the fog, baked once on the CPU in small slices
+// ---------------------------------------------------------------------------
+let noiseTex = null;
+function mulberry32(a) {
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gradientNoise(seed) {
+  const rnd = mulberry32(seed);
+  const perm = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) perm[i] = i;
+  for (let i = 255; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; const t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+  const Pm = new Uint16Array(512);
+  for (let i = 0; i < 512; i++) Pm[i] = perm[i & 255];
+  const G = new Float32Array(768);
+  for (let i = 0; i < 256; i++) {
+    let x, y, z, l;
+    do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; l = x * x + y * y + z * z; } while (l > 1 || l < 1e-3);
+    l = Math.sqrt(l); G[i * 3] = x / l; G[i * 3 + 1] = y / l; G[i * 3 + 2] = z / l;
+  }
+  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+  const dg = (ix, iy, iz, x, y, z) => { const h = Pm[Pm[Pm[ix] + iy] + iz] * 3; return G[h] * x + G[h + 1] * y + G[h + 2] * z; };
+  return (x, y, z, per) => {
+    const xf = Math.floor(x), yf = Math.floor(y), zf = Math.floor(z);
+    const fx = x - xf, fy = y - yf, fz = z - zf;
+    const x0 = ((xf % per) + per) % per, y0 = ((yf % per) + per) % per, z0 = ((zf % per) + per) % per;
+    const x1 = (x0 + 1) % per, y1 = (y0 + 1) % per, z1 = (z0 + 1) % per;
+    const u = fade(fx), v = fade(fy), w = fade(fz);
+    const a = dg(x0, y0, z0, fx, fy, fz), b = dg(x1, y0, z0, fx - 1, fy, fz);
+    const c = dg(x0, y1, z0, fx, fy - 1, fz), d = dg(x1, y1, z0, fx - 1, fy - 1, fz);
+    const e = dg(x0, y0, z1, fx, fy, fz - 1), f = dg(x1, y0, z1, fx - 1, fy, fz - 1);
+    const g = dg(x0, y1, z1, fx, fy - 1, fz - 1), h = dg(x1, y1, z1, fx - 1, fy - 1, fz - 1);
+    const ab = a + (b - a) * u, cd = c + (d - c) * u, ef = e + (f - e) * u, gh = g + (h - g) * u;
+    const abcd = ab + (cd - ab) * v, efgh = ef + (gh - ef) * v;
+    return abcd + (efgh - abcd) * w;
+  };
+}
+async function bakeNoise() {
+  const N = 64, NN = N * N * N;
+  const chans = [new Float32Array(NN), new Float32Array(NN), new Float32Array(NN), new Float32Array(NN)];
+  const nr = gradientNoise(1337), ng = gradientNoise(7331), nb = gradientNoise(4242), na = gradientNoise(9001);
+  let t0 = performance.now();
+  for (let z = 0; z < N; z++) {
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const u = (x + 0.5) / N, v = (y + 0.5) / N, w = (z + 0.5) / N;
+        let r = 0, amp = 1;
+        for (let f = 2; f <= 32; f *= 2, amp *= 0.5) r += amp * nr(u * f, v * f, w * f, f);
+        const i = x + N * (y + N * z);
+        chans[0][i] = r;
+        chans[1][i] = ng(u * 2, v * 2, w * 2, 2) + 0.4 * ng(u * 4, v * 4, w * 4, 4);
+        chans[2][i] = nb(u * 2, v * 2, w * 2, 2) + 0.4 * nb(u * 4, v * 4, w * 4, 4);
+        chans[3][i] = na(u * 3, v * 3, w * 3, 3) + 0.45 * na(u * 6, v * 6, w * 6, 6);
+      }
+    }
+    if (performance.now() - t0 > 12) { await yieldFrame(); t0 = performance.now(); }
+  }
+  const out = new Uint8Array(NN * 4);
+  for (let c = 0; c < 4; c++) {
+    const s = Float32Array.from(chans[c]).sort();
+    const lo = s[Math.floor(NN * 0.01)], hi = s[Math.floor(NN * 0.99)];
+    const k = 1 / Math.max(hi - lo, 1e-6), src = chans[c];
+    for (let i = 0; i < NN; i++) {
+      const t = (src[i] - lo) * k;
+      out[i * 4 + c] = t <= 0 ? 0 : t >= 1 ? 255 : Math.round(t * 255);
+    }
+    await yieldFrame();
+  }
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.texStorage3D(gl.TEXTURE_3D, 7, gl.RGBA8, N, N, N);
+  gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, N, N, N, gl.RGBA, gl.UNSIGNED_BYTE, out);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.REPEAT);
+  gl.generateMipmap(gl.TEXTURE_3D);
+  noiseTex = tex;
+}
+bakeNoise();
+
+// ---------------------------------------------------------------------------
+// Course textures
+// ---------------------------------------------------------------------------
+function dataTex(internal, fmt, w, h, data, filter) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, fmt, gl.FLOAT, data);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+// a smooth "ground" for the fog to sit on: the course height, blurred, and spread out over the void
+function buildFogRef(C) {
+  const fw = Math.ceil(C.gw / 2), fh = Math.ceil(C.gh / 2), N = fw * fh;
+  const v = new Float32Array(N), known = new Uint8Array(N);
+  let sum = 0, cnt = 0;
+  for (let j = 0; j < fh; j++) {
+    for (let i = 0; i < fw; i++) {
+      let s = 0, c = 0;
+      for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
+        const ci = i * 2 + a, cj = j * 2 + b;
+        if (ci >= C.gw || cj >= C.gh) continue;
+        const o = (cj * C.gw + ci) * 4;
+        if (C.grid[o + 3] < 0.5) continue;
+        s += C.grid[o] - (C.grid[o + 3] === MAT.rail ? RAIL_H : 0); c++;
+      }
+      if (c) { v[j * fw + i] = s / c; known[j * fw + i] = 1; sum += s / c; cnt++; }
+    }
+  }
+  const mean = cnt ? sum / cnt : 0;
+  for (let i = 0; i < N; i++) if (!known[i]) v[i] = mean;
+  const at = (i, j) => v[Math.min(fh - 1, Math.max(0, j)) * fw + Math.min(fw - 1, Math.max(0, i))];
+  for (let it = 0; it < 300; it++) {
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
+      if (known[j * fw + i]) continue;
+      v[j * fw + i] = 0.25 * (at(i - 1, j) + at(i + 1, j) + at(i, j - 1) + at(i, j + 1));
+    }
+  }
+  const tmp = new Float32Array(N);
+  for (let it = 0; it < 4; it++) {
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
+      tmp[j * fw + i] = 0.4 * at(i, j) + 0.15 * (at(i - 1, j) + at(i + 1, j) + at(i, j - 1) + at(i, j + 1));
+    }
+    v.set(tmp);
+  }
+  return { v, fw, fh, size: [fw * 1.0, fh * 1.0] };
+}
+function fogRefAt(x, z) {
+  const F = course.fogRef;
+  if (!F) return 0;
+  const i = Math.min(F.fw - 1, Math.max(0, Math.floor(x - course.ox))), j = Math.min(F.fh - 1, Math.max(0, Math.floor(z - course.oz)));
+  return F.v[j * F.fw + i];
+}
+const dummyTex = dataTex(gl.R16F, gl.RED, 1, 1, new Float32Array([0]), gl.LINEAR);
+let gridTex = null, blkTex = null, fogRefTex = null;
+function uploadCourse(C) {
+  for (const t of [gridTex, blkTex, fogRefTex]) if (t && t !== dummyTex) gl.deleteTexture(t);
+  gridTex = dataTex(gl.RGBA32F, gl.RGBA, C.gw, C.gh, C.grid, gl.NEAREST);
+  blkTex = dataTex(gl.R32F, gl.RED, C.bw, C.bh, C.blk, gl.NEAREST);
+  if (C.def.fog) {
+    if (!C.fogRef) C.fogRef = buildFogRef(C);
+    fogRefTex = dataTex(gl.R16F, gl.RED, C.fogRef.fw, C.fogRef.fh, C.fogRef.v, gl.LINEAR);
+  } else fogRefTex = dummyTex;
+}
+
+// ---------------------------------------------------------------------------
+// Fog controls
+// ---------------------------------------------------------------------------
+const params = { thickness: 1.5, height: 1.7, wind: 0.6, refill: 9, swirl: 1, showMap: false };
+const sliders = {};
+function bindSlider(id, key, fmt) {
+  const el = $(id), out = el.parentElement.querySelector('output');
+  const upd = () => { params[key] = parseFloat(el.value); out.textContent = fmt(params[key]); };
+  el.addEventListener('input', upd); upd();
+  sliders[key] = (v) => { el.value = v; upd(); };
+}
+bindSlider('sThick', 'thickness', (v) => v.toFixed(2));
+bindSlider('sHeight', 'height', (v) => v.toFixed(2));
+bindSlider('sWind', 'wind', (v) => v.toFixed(2) + ' u/s');
+bindSlider('sRefill', 'refill', (v) => v.toFixed(1) + ' s');
+bindSlider('sSwirl', 'swirl', (v) => v.toFixed(2));
+$('mapBtn').addEventListener('click', (e) => {
+  params.showMap = !params.showMap;
+  e.currentTarget.setAttribute('aria-pressed', String(params.showMap));
+  e.currentTarget.textContent = params.showMap ? 'Hide' : 'Show';
+});
+
+// ---------------------------------------------------------------------------
+// Settings: kept in this browser, applied live
+// ---------------------------------------------------------------------------
+const SET_KEY = 'marbleMist.settings';
+const SET_DEFAULTS = { master: 80, music: 55, sfx: 80, ui: 65, bgMute: '1', res: 'auto', fps: 'display', shadows: '1',
+  fogQ: 'high', bright: 100, zoom: 30, tags: 'all', minimap: '1', standings: '1', hints: '1', stats: '1', deadzone: 20, rumble: '1' };
+const settings = { ...SET_DEFAULTS };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
+const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* ignore */ } };
+const setOn = (k) => settings[k] === '1';
+const FOG_STEPS = { low: 24, medium: 40, high: 64 };
+const SET_FMT = { master: (v) => v + '%', music: (v) => v + '%', sfx: (v) => v + '%', ui: (v) => v + '%', bright: (v) => v + '%',
+  zoom: (v) => String(v), deadzone: (v) => v + '%' };
+const settingsEl = $('settings');
+function syncSettingsUI() {
+  settingsEl.querySelectorAll('.seg[data-set]').forEach((seg) => seg.querySelectorAll('button').forEach((b) =>
+    b.setAttribute('aria-pressed', String(b.dataset.v === String(settings[seg.dataset.set])))));
+  settingsEl.querySelectorAll('input[data-set]').forEach((inp) => {
+    inp.value = settings[inp.dataset.set];
+    inp.nextElementSibling.textContent = SET_FMT[inp.dataset.set](+inp.value);
+  });
+}
+settingsEl.querySelectorAll('.seg[data-set] button').forEach((b) => b.addEventListener('click', () => {
+  settings[b.parentElement.dataset.set] = b.dataset.v;
+  saveSettings(); syncSettingsUI(); applySettings();
+}));
+settingsEl.querySelectorAll('input[data-set]').forEach((inp) => inp.addEventListener('input', () => {
+  settings[inp.dataset.set] = +inp.value;
+  saveSettings(); syncSettingsUI(); applySettings();
+}));
+document.querySelectorAll('#setTabs button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('#setTabs button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  settingsEl.querySelectorAll('section[data-tab]').forEach((sec) => { sec.hidden = sec.dataset.tab !== b.dataset.tab; });
+}));
+$('setReset').addEventListener('click', () => {
+  Object.assign(settings, SET_DEFAULTS);
+  saveSettings(); syncSettingsUI(); applySettings();
+});
+let settingsFrom = null;
+function openSettings(from) {
+  settingsFrom = from;
+  from.hidden = true;
+  syncSettingsUI();
+  settingsEl.hidden = false;
+}
+function closeSettings() {
+  settingsEl.hidden = true;
+  if (settingsFrom) settingsFrom.hidden = false;
+  settingsFrom = null;
+}
+$('setDone').addEventListener('click', closeSettings);
+// everything a setting touches, in one place
+function applySettings() {
+  setVolumes();
+  gov.fixed = settings.res === 'auto' ? 0 : (+settings.res) ** 2;
+  applySize();
+  fogMax = FOG_STEPS[settings.fogQ] || 64;
+  fogSteps = Math.min(fogSteps, fogMax);
+  if (settings.res !== 'auto') fogSteps = fogMax;
+  cam.distTarget = +settings.zoom;
+  $('minimap').hidden = !setOn('minimap');
+  stEl.hidden = !setOn('standings');
+  hintEl.hidden = !setOn('hints');
+  statsEl.hidden = !setOn('stats');
+}
+
+
+// ---------------------------------------------------------------------------
+// Audio: everything is synthesised with Web Audio, no sound files
+// ---------------------------------------------------------------------------
+const audio = { ctx: null, master: null, music: null, sfx: null, ui: null, noise: null, roll: null, pack: null, muted: false, last: {}, count: {} };
+const sfxEvents = [];
+const vol = (v) => (v / 100) ** 2;
+function initAudio() {
+  if (audio.ctx) { if (audio.ctx.state === 'suspended') audio.ctx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ctx = new AC();
+  audio.ctx = ctx;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 4;
+  audio.master = ctx.createGain();
+  audio.master.connect(comp); comp.connect(ctx.destination);
+  // a small generated room for the music and a touch of the effects
+  const len = Math.floor(ctx.sampleRate * 1.8), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3; }
+  const verb = ctx.createConvolver(), verbOut = ctx.createGain();
+  verb.buffer = ir; verbOut.gain.value = 0.35; verb.connect(verbOut); verbOut.connect(audio.master);
+  for (const [k, send] of [['music', 0.35], ['sfx', 0.1], ['ui', 0.2]]) {
+    const g = ctx.createGain(), sg = ctx.createGain();
+    g.connect(audio.master); sg.gain.value = send; g.connect(sg); sg.connect(verb);
+    audio[k] = g;
+  }
+  const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  audio.noise = nb;
+  audio.roll = makeRoll(); audio.pack = makeRoll();
+  setVolumes();
+  music.start();
+}
+['pointerdown', 'keydown', 'touchend'].forEach((ev) => addEventListener(ev, initAudio, { capture: true }));
+function bgMute() { audio.muted = setOn('bgMute') && (document.hidden || !document.hasFocus()); setVolumes(); }
+document.addEventListener('visibilitychange', bgMute);
+addEventListener('blur', bgMute); addEventListener('focus', bgMute);
+function setVolumes() {
+  if (!audio.ctx) return;
+  const t = audio.ctx.currentTime;
+  audio.master.gain.setTargetAtTime(audio.muted ? 0 : vol(settings.master), t, 0.05);
+  audio.music.gain.setTargetAtTime(vol(settings.music) * 2.2 * (paused ? 0.35 : 1), t, 0.15);
+  audio.sfx.gain.setTargetAtTime(sfxLevel(), t, 0.05);
+  audio.ui.gain.setTargetAtTime(vol(settings.ui) * 1.6, t, 0.05);
+}
+// the demo race behind the menus stays in the background
+const sfxLevel = () => vol(settings.sfx) * 2.0 * (state === 'menu' || state === 'betting' || state === 'loading' ? 0.3 : 1);
+function makeRoll() {
+  const ctx = audio.ctx, src = ctx.createBufferSource();
+  src.buffer = audio.noise; src.loop = true;
+  const bp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+  bp.type = 'bandpass'; bp.frequency.value = 300; bp.Q.value = 0.9;
+  lp.type = 'lowpass'; lp.frequency.value = 1400;
+  g.gain.value = 0;
+  src.connect(bp); bp.connect(lp); lp.connect(g);
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (pan) { g.connect(pan); pan.connect(audio.sfx); } else g.connect(audio.sfx);
+  src.start();
+  return { bp, lp, g, pan };
+}
+function out(node, bus, pan) {
+  if (pan && audio.ctx.createStereoPanner) {
+    const p = audio.ctx.createStereoPanner();
+    p.pan.value = clamp(pan, -1, 1);
+    node.connect(p); p.connect(bus);
+  } else node.connect(bus);
+}
+// one enveloped oscillator, optionally gliding and filtered
+function voice(bus, type, f0, f1, t, dur, peak, attack = 0.004, pan = 0, filter = null) {
+  const ctx = audio.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(f1, 20), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, attack + 0.01));
+  let n = o;
+  if (filter) { const f = ctx.createBiquadFilter(); f.type = filter[0]; f.frequency.value = filter[1]; f.Q.value = filter[2] ?? 0.7; o.connect(f); n = f; }
+  n.connect(g); out(g, bus, pan);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function noiseHit(bus, t, dur, peak, type, freq, q = 0.8, pan = 0, f1 = 0) {
+  const ctx = audio.ctx, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = audio.noise;
+  f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f); f.connect(g); out(g, bus, pan);
+  src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.05);
+}
+const SFX = {
+  // world
+  clack(s, pan, t) { const f = 2300 + Math.random() * 900; voice(audio.sfx, 'sine', f, f * 0.97, t, 0.09, 0.22 * s, 0.002, pan); voice(audio.sfx, 'sine', f * 1.51, f * 1.5, t, 0.05, 0.1 * s, 0.002, pan); },
+  thud(s, pan, t) { voice(audio.sfx, 'sine', 120, 50, t, 0.17, 0.5 * s, 0.003, pan); noiseHit(audio.sfx, t, 0.06, 0.22 * s, 'lowpass', 900, 0.7, pan); },
+  land(s, pan, t) { voice(audio.sfx, 'sine', 85, 42, t, 0.14, 0.45 * s, 0.003, pan); noiseHit(audio.sfx, t, 0.04, 0.12 * s, 'lowpass', 600, 0.7, pan); },
+  boing(s, pan, t) { voice(audio.sfx, 'triangle', 440, 220, t, 0.3, 0.38 * s, 0.003, pan); voice(audio.sfx, 'sine', 880, 620, t, 0.12, 0.14 * s, 0.002, pan); },
+  whack(s, pan, t) { noiseHit(audio.sfx, t, 0.09, 0.4 * s, 'bandpass', 700, 1.2, pan); voice(audio.sfx, 'square', 170, 90, t, 0.1, 0.1 * s, 0.002, pan, ['lowpass', 900]); },
+  stomp(s, pan, t) { voice(audio.sfx, 'sine', 78, 32, t, 0.42, 0.55 * s, 0.004, pan); noiseHit(audio.sfx, t, 0.25, 0.28 * s, 'lowpass', 420, 0.7, pan); },
+  boost(s, pan, t) { voice(audio.sfx, 'sawtooth', 220, 900, t, 0.28, 0.1 * s, 0.01, pan, ['lowpass', 2400]); },
+  fell(s, pan, t) { voice(audio.sfx, 'sine', 1100, 150, t, 1.0, 0.16 * s, 0.02, pan); },
+  shatter(s, pan, t) {
+    noiseHit(audio.sfx, t, 0.3, 0.45 * s, 'highpass', 2500, 0.7, pan);
+    for (let i = 0; i < 7; i++) { const f = 3000 + Math.random() * 3500; voice(audio.sfx, 'sine', f, f, t + Math.random() * 0.2, 0.15, 0.1 * s, 0.001, pan + Math.random() * 0.6 - 0.3); }
+  },
+  squash(s, pan, t) { noiseHit(audio.sfx, t, 0.22, 0.55 * s, 'lowpass', 700, 0.8, pan, 140); voice(audio.sfx, 'sine', 62, 30, t, 0.3, 0.5 * s, 0.004, pan); },
+  // interface
+  respawn(s, pan, t) { [1, 1.25, 1.5].forEach((k, i) => voice(audio.ui, 'sine', 660 * k, 660 * k, t + i * 0.07, 0.25, 0.1)); },
+  beep(s, pan, t) { voice(audio.ui, 'square', 660, 660, t, 0.16, 0.16, 0.003, 0, ['lowpass', 2000]); },
+  go(s, pan, t) { voice(audio.ui, 'square', 990, 990, t, 0.42, 0.18, 0.003, 0, ['lowpass', 2600]); voice(audio.ui, 'triangle', 1485, 1485, t, 0.3, 0.08); },
+  finish(s, pan, t) { [523, 659, 784, 1047].forEach((f, i) => voice(audio.ui, 'triangle', f, f, t + i * 0.09, 0.4, 0.2)); },
+  win(s, pan, t) {
+    [523, 659, 784, 1047, 1319].forEach((f, i) => voice(audio.ui, 'triangle', f, f, t + i * 0.08, 0.35, 0.2));
+    [523, 659, 784].forEach((f) => voice(audio.ui, 'triangle', f * 2, f * 2, t + 0.45, 1.1, 0.1, 0.02));
+  },
+  lose(s, pan, t) { voice(audio.ui, 'triangle', 392, 392, t, 0.3, 0.18); voice(audio.ui, 'triangle', 311, 300, t + 0.22, 0.6, 0.18); },
+  coins(s, pan, t) { for (let i = 0; i < 6; i++) { const f = 1800 + i * 220; voice(audio.ui, 'sine', f, f, t + i * 0.05, 0.14, 0.13); } },
+  move(s, pan, t) { voice(audio.ui, 'sine', 1250, 1250, t, 0.035, 0.05); },
+  select(s, pan, t) { voice(audio.ui, 'triangle', 880, 1320, t, 0.09, 0.11); },
+};
+const SFX_GAP = { clack: 0.035, thud: 0.04, land: 0.05, boing: 0.08, whack: 0.05, stomp: 0.12, move: 0.03 };
+function play(name, s = 1, pan = 0) {
+  const ctx = audio.ctx;
+  if (!ctx || ctx.state !== 'running' || audio.muted) return;
+  const t = ctx.currentTime;
+  if (t - (audio.last[name] || -1) < (SFX_GAP[name] || 0.01)) return;
+  audio.last[name] = t;
+  audio.count[name] = (audio.count[name] || 0) + 1;
+  SFX[name](Math.min(1.2, s), pan, t);
+}
+// world sounds are queued by the physics and played once per frame, placed and faded by distance from the camera
+function emit(k, x, y, z, s) {
+  if (testAuto || !audio.ctx || audio.ctx.state !== 'running' || sfxEvents.length > 24) return;
+  sfxEvents.push({ k, x, y, z, s });
+}
+function audioFrame() {
+  const ctx = audio.ctx;
+  if (!ctx || ctx.state !== 'running') { sfxEvents.length = 0; return; }
+  const t = ctx.currentTime;
+  const live = !paused && (state === 'racing' || state === 'finished' || state === 'countdown' || state === 'menu' || state === 'betting');
+  // the marble you follow rolls loudest; the rest of the pack is a softer layer
+  const m = focus, sp = Math.hypot(m.vx, m.vz), ice = m.gmat === MAT.ice;
+  const rolling = live && m.dead <= 0 && m.grounded > 0;
+  const k = Math.min(1, sp / 14);
+  audio.roll.g.gain.setTargetAtTime(rolling ? 1.1 * k ** 1.3 * (ice ? 0.6 : 1) : 0, t, 0.05);
+  audio.roll.bp.frequency.setTargetAtTime(220 + sp * 55 + (ice ? 700 : 0), t, 0.05);
+  audio.roll.bp.Q.value = ice ? 2.5 : 0.9;
+  let pack = 0;
+  for (const o of marbles) {
+    if (o === m || o.dead > 0 || o.grounded <= 0) continue;
+    const d2 = (o.x - cam.x) ** 2 + (o.z - cam.z) ** 2;
+    if (d2 < 300) pack += Math.hypot(o.vx, o.vz) / (1 + d2 / 40);
+  }
+  audio.pack.g.gain.setTargetAtTime(live ? 0.45 * Math.min(1, pack / 25) : 0, t, 0.08);
+  audio.pack.bp.frequency.setTargetAtTime(260 + pack * 8, t, 0.1);
+  let n = 0;
+  for (const e of sfxEvents) {
+    const d2 = (e.x - cam.x) ** 2 + (e.y - cam.y) ** 2 + (e.z - cam.z) ** 2, att = 1 / (1 + d2 / 60);
+    if (att < 0.04 || n > 8) continue;
+    const sp2 = worldToScreen(e.x, e.y, e.z), pan = sp2 ? clamp((sp2.x / innerWidth - 0.5) * 1.4, -0.8, 0.8) : 0;
+    play(e.k, e.s * att, pan);
+    n++;
+  }
+  sfxEvents.length = 0;
+  audio.sfx.gain.setTargetAtTime(sfxLevel(), t, 0.25);
+  music.mood = (state === 'countdown' || state === 'racing' || state === 'finished') ? 'race' : 'menu';
+  if (course) music.key = MUSIC_KEYS[course.def.theme] || MUSIC_KEYS.day;
+}
+
+// ---- music: a small generative sequencer; calm in menus, with drums in a race ----
+const MODES = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], dorian: [0, 2, 3, 5, 7, 9, 10],
+  lydian: [0, 2, 4, 6, 7, 9, 11], phrygian: [0, 1, 3, 5, 7, 8, 10] };
+const MUSIC_KEYS = { day: [60, 'major'], sunset: [65, 'lydian'], night: [57, 'minor'], neon: [64, 'minor'], meadow: [62, 'major'],
+  desert: [62, 'dorian'], candy: [67, 'major'], arctic: [59, 'minor'], ocean: [55, 'major'], dawn: [64, 'major'],
+  mono: [57, 'dorian'], lava: [62, 'phrygian'], jungle: [60, 'dorian'] };
+const music = { timer: 0, next: 0, step: 0, mood: 'menu', key: MUSIC_KEYS.day,
+  start() { if (this.timer) return; this.next = audio.ctx.currentTime + 0.1; this.timer = setInterval(musicTick, 50); } };
+const midiHz = (m) => 440 * 2 ** ((m - 69) / 12);
+function musicTick() {
+  const ctx = audio.ctx;
+  if (!ctx || ctx.state !== 'running' || audio.muted || settings.music <= 0) return;
+  if (music.next < ctx.currentTime - 0.3) music.next = ctx.currentTime + 0.05;   // after a pause in playback
+  while (music.next < ctx.currentTime + 0.2) {
+    const race = music.mood === 'race', stepDur = 60 / (race ? 112 : 84) / 4;
+    musicStep(music.next, race, stepDur);
+    music.next += stepDur;
+    music.step = (music.step + 1) % 64;
+  }
+}
+function musicStep(t, race, stepDur) {
+  const M = audio.music, s = music.step % 16, bar = Math.floor(music.step / 16);
+  const [root, modeName] = music.key, mode = MODES[modeName];
+  const prog = mode[2] === 3 ? [0, 5, 2, 6] : [0, 5, 3, 4];
+  const deg = prog[bar];
+  const note = (d, oct = 0) => root + mode[((d % 7) + 7) % 7] + 12 * (Math.floor(d / 7) + oct);
+  if (s === 0) {
+    for (const k of [0, 2, 4]) {
+      const f = midiHz(note(deg + k));
+      voice(M, 'triangle', f, f, t, stepDur * 16 + 0.3, 0.045, 0.4, 0, ['lowpass', race ? 1500 : 1000]);
+      voice(M, 'sine', f * 1.004, f * 1.004, t, stepDur * 16 + 0.3, 0.03, 0.5);
+    }
+  }
+  if (s === 0 || (race && (s === 6 || s === 8 || s === 14))) {
+    const f = midiHz(note(deg, -2) + (s === 6 || s === 14 ? 7 : 0));
+    voice(M, 'triangle', f, f, t, stepDur * (s === 0 ? 6 : 2), 0.17, 0.01, 0, ['lowpass', 480]);
+  }
+  const every = race ? 2 : 4;
+  if (s % every === 0) {
+    const i = (s / every) % 4, f = midiHz(note(deg + [0, 2, 4, 7][i], 1));
+    voice(M, race ? 'square' : 'sine', f, f, t, stepDur * 1.6, race ? 0.03 : 0.045, 0.005, i % 2 ? 0.3 : -0.3, ['lowpass', 2200]);
+  }
+  if (race) {
+    if (s % 8 === 0 || s === 10) voice(M, 'sine', 130, 42, t, 0.22, 0.5, 0.002);
+    if (s === 4 || s === 12) noiseHit(M, t, 0.14, 0.18, 'bandpass', 1800, 0.8);
+    if (s % 2 === 0) noiseHit(M, t, 0.04, s % 4 === 2 ? 0.06 : 0.03, 'highpass', 7000, 0.7);
+  }
+}
+// menu clicks
+document.addEventListener('click', (e) => { if (e.target.closest('.overlay button, #oddsTable tr')) play('select'); }, true);
+
+// ---------------------------------------------------------------------------
+// Game state
+// ---------------------------------------------------------------------------
+let course = null, courseIndex = 0, difficulty = 1, testAuto = false;
+// race: you steer the chrome marble. bet: nobody steers, you back one marble with coins
+let mode = 'race', bet = null;
+let wallet = 100;
+try { const v = parseInt(localStorage.getItem('marbleMist.coins'), 10); if (v >= 0) wallet = v; } catch (e) { /* storage unavailable */ }
+const saveWallet = () => { try { localStorage.setItem('marbleMist.coins', String(wallet)); } catch (e) { /* ignore */ } };
+let state = 'loading';          // loading | menu | countdown | racing | finished
+let paused = false, countdown = 0, raceTime = 0, finishOrder = [], resultsShown = false, resultsTimer = 0;
+let simClock = 0, simTime = 0, frame = 0, simAcc = 0;
+const SIM_DT = 1 / 60;
+let windDir = [1, 0];
+const airShift = [0, 0];
+
+const marbles = RACERS.map((r, i) => ({
+  id: i, name: r.name, f0: r.f0, css: r.css, isPlayer: i === 0,
+  x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, grounded: 0, gmat: 1, groundY: 0,
+  idx: 0, prog: 0, best: 0, lat: 0, dead: 0, deadWhy: '', hidden: false, inv: 0, falls: 0,
+  finished: false, finishTime: 0,
+  ai: { skill: 0.9, lane: 0, laneTarget: 0, laneTimer: 0, pickT: 0, ignore: new Set(), stuck: 0, stuckProg: 0, brave: 0, wobble: 0 },
+}));
+const player = marbles[0];
+let focus = player;          // the marble the camera follows
+const cam = { x: 0, y: 0, z: 0, yHold: 0, dist: 30, distTarget: 30, pitch: PITCH, pitchT: 0 };
+
+const wisps = [
+  { col: [1, 0.5, 0.16], ph: 0.0, power: 0.42 },
+  { col: [0.3, 0.75, 1], ph: 2.2, power: 0.5 },
+  { col: [1, 0.62, 0.25], ph: 4.1, power: 0.38 },
+];
+const wispAnchor = { x: 0, y: 0, z: 0 };
+const wispPos = new Float32Array(9), wispCol = new Float32Array(9);
+const marbU = new Float32Array(NM * 4), marbF0 = new Float32Array(NM * 3), ballsU = new Float32Array(NM * 4);
+RACERS.forEach((r, i) => marbF0.set(r.f0, i * 3));
+const boxA = new Float32Array(NB * 4), boxB = new Float32Array(NB * 4), cylA = new Float32Array(NC * 4), cylB = new Float32Array(NC * 4);
+let nBox = 0, nCyl = 0;
+
+// ---- course queries ----
+function cellTop(x, z) {
+  const C = course, i = Math.floor((x - C.ox) / CS), j = Math.floor((z - C.oz) / CS);
+  if (i < 0 || j < 0 || i >= C.gw || j >= C.gh) return null;
+  const o = (j * C.gw + i) * 4;
+  if (C.grid[o + 3] < 0.5) return null;
+  return C.grid[o] + C.grid[o + 1] * (x - (C.ox + (i + 0.5) * CS)) + C.grid[o + 2] * (z - (C.oz + (j + 0.5) * CS));
+}
+function pathPoint(s) {
+  const P = course.path, f = Math.max(0, Math.min(P.n - 1.001, s / P.ds)), i = Math.floor(f), t = f - i;
+  return { x: P.x[i] + (P.x[i + 1] - P.x[i]) * t, z: P.z[i] + (P.z[i + 1] - P.z[i]) * t,
+    tx: P.tx[i], tz: P.tz[i], nx: P.nx[i], nz: P.nz[i], hw: P.hw[i], i };
+}
+// nearest point on the centre line, searched around the last known index
+function locate(m) {
+  const P = course.path, n = P.n;
+  let best = m.idx, bd = Infinity;
+  const scan = (lo, hi) => {
+    for (let i = Math.max(0, lo); i <= Math.min(n - 1, hi); i++) {
+      const dx = m.x - P.x[i], dz = m.z - P.z[i], dy = (m.y - P.y[i]) * 0.4, d = dx * dx + dz * dz + dy * dy;
+      if (d < bd) { bd = d; best = i; }
+    }
+  };
+  scan(m.idx - 10, m.idx + 24);
+  if (bd > 64) scan(0, n - 1);
+  m.idx = best;
+  const a = Math.max(0, best - 1), b = Math.min(n - 1, best + 1);
+  const dx = P.x[b] - P.x[a], dz = P.z[b] - P.z[a], l2 = dx * dx + dz * dz || 1;
+  const f = Math.max(0, Math.min(1, ((m.x - P.x[a]) * dx + (m.z - P.z[a]) * dz) / l2));
+  const cx = P.x[a] + dx * f, cz = P.z[a] + dz * f;
+  m.lat = (m.x - cx) * P.nx[best] + (m.z - cz) * P.nz[best];
+  return P.s[a] + (P.s[b] - P.s[a]) * f;
+}
+
+// ---- obstacles ----
+function stomperLift(t, ph) {
+  const P = 2.8, u = (((t / P + ph) % 1) + 1) % 1 * P;
+  if (u < 1.3) return [2.6, 0];
+  if (u < 1.45) { const k = (u - 1.3) / 0.15; return [2.6 * (1 - k * k), -2.6 * 2 * k / 0.15]; }
+  if (u < 1.95) return [0, 0];
+  const k = (u - 1.95) / 0.85, s = k * k * (3 - 2 * k);
+  return [2.6 * s, 2.6 * 6 * k * (1 - k) / 0.85];
+}
+function initObstacles(C) {
+  for (const o of C.obstacles) {
+    o.prims = [];
+    if (o.t === 'bumper') o.prims.push({ cyl: true, kind: 0, x: o.wx, z: o.wz, r: 0.5, y0: o.base - 0.3, y1: o.base + 0.75, bump: true });
+    if (o.t === 'spinner') {
+      o.prims.push({ cyl: true, kind: 1, x: o.wx, z: o.wz, r: 0.2, y0: o.base - 0.3, y1: o.base + 1.0 });
+      o.prims.push({ cyl: false, kind: 0, x: o.wx, y: o.base + 0.55, z: o.wz, hx: o.len, hy: 0.14, hz: 0.14, yaw: 0,
+        vx: 0, vy: 0, vz: 0, om: o.w, px: o.wx, pz: o.wz });
+    }
+    if (o.t === 'pusher') o.prims.push({ cyl: false, kind: 1, x: o.wx, y: o.base + 0.45, z: o.wz, hx: 0.7, hy: 0.45, hz: 0.7, yaw: 0, vx: 0, vy: 0, vz: 0, om: 0 });
+    if (o.t === 'stomper') {
+      o.prims.push({ cyl: false, kind: 2, x: o.wx, y: o.base + 3, z: o.wz, hx: 0.9, hy: 0.5, hz: 0.9, yaw: 0, vx: 0, vy: 0, vz: 0, om: 0, stomp: true });
+      o.prims.push({ cyl: true, kind: 1, x: o.wx, z: o.wz, r: 0.16, y0: o.base + 3.5, y1: o.base + 5.2 });
+    }
+  }
+}
+function poseObstacles(t) {
+  for (const o of course.obstacles) {
+    if (o.t === 'spinner') o.prims[1].yaw = o.ph + o.w * t;
+    else if (o.t === 'pusher') {
+      const b = o.prims[0], a = o.w * t + o.ph, off = o.amp * Math.sin(a), v = o.amp * o.w * Math.cos(a);
+      b.x = o.wx + o.nx * off; b.z = o.wz + o.nz * off; b.vx = o.nx * v; b.vz = o.nz * v;
+    } else if (o.t === 'stomper') {
+      const [lift, vy] = stomperLift(t, o.ph), b = o.prims[0];
+      if (lift === 0 && o.lift > 0) emit('stomp', o.wx, o.base, o.wz, 1);
+      o.lift = lift;
+      b.y = o.base + lift + 0.5; b.vy = vy; o.prims[1].y0 = b.y + 0.5;
+    }
+  }
+}
+
+// ---- marble physics ----
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+function kill(m, why) {
+  if (m.dead > 0 || m.finished) return;
+  m.dead = why === 'fell' ? 1.1 : 1.5; m.deadWhy = why; m.hidden = why !== 'fell'; m.falls++;
+  emit(why, m.x, m.y, m.z, m === focus ? 1.4 : 1);
+  // the AI learns: whatever just got it is taken seriously from now on
+  for (const o of course.obstacles) if (Math.abs(o.s - m.prog) < 12) m.ai.ignore.delete(o.id);
+  const word = why === 'fell' ? 'FELL!' : why === 'shatter' ? 'SHATTERED!' : 'SQUASHED!';
+  if (state === 'racing' && mode === 'race' && m.isPlayer) { flash(word, 1.2, true, true); rumble(0.9, 0.6, why === 'fell' ? 200 : 380); }
+  if (state === 'racing' && mode === 'bet' && bet && m === bet.pick) flash(`${m.name.toUpperCase()} ${word}`, 1.2, true, true);
+}
+function respawn(m) {
+  const C = course;
+  let s = C.checks[0];
+  for (const c of C.checks) if (c <= m.best + 0.5) s = c;
+  const p = pathPoint(s + 1.5);
+  const room = Math.max(0, p.hw - 0.8);
+  let lat = 0;
+  for (const cand of [0, -1.4, 1.4, -2.8, 2.8]) {
+    if (Math.abs(cand) > room + 0.01) continue;
+    const x = p.x + p.nx * cand, z = p.z + p.nz * cand;
+    if (marbles.every((o) => o === m || o.dead > 0 || (o.x - x) ** 2 + (o.z - z) ** 2 > 1.7)) { lat = cand; break; }
+  }
+  m.x = p.x + p.nx * lat; m.z = p.z + p.nz * lat;
+  m.y = (cellTop(m.x, m.z) ?? p.y) + BALL_R + 0.05;
+  m.vx = p.tx * 1.5; m.vz = p.tz * 1.5; m.vy = 0;
+  m.idx = p.i; m.dead = 0; m.hidden = false; m.inv = 1.2; m.groundY = m.y; m.grounded = 0;
+  if (m === focus && !testAuto) play('respawn');
+  m.prog = locate(m);
+}
+function terrainContacts(m) {
+  const C = course, R = BALL_R, g = C.grid, gw = C.gw;
+  const i0 = Math.max(0, Math.floor((m.x - R - C.ox) / CS)), i1 = Math.min(gw - 1, Math.floor((m.x + R - C.ox) / CS));
+  const j0 = Math.max(0, Math.floor((m.z - R - C.oz) / CS)), j1 = Math.min(C.gh - 1, Math.floor((m.z + R - C.oz) / CS));
+  for (let j = j0; j <= j1; j++) {
+    for (let i = i0; i <= i1; i++) {
+      const o = (j * gw + i) * 4, mat = g[o + 3];
+      if (mat < 0.5) continue;
+      const h0 = g[o], gx = g[o + 1], gz = g[o + 2];
+      const x0 = C.ox + i * CS, z0 = C.oz + j * CS, cx = x0 + CS / 2, cz = z0 + CS / 2;
+      const il = 1 / Math.sqrt(gx * gx + 1 + gz * gz), nx = -gx * il, ny = il, nz = -gz * il;
+      const sd = (m.y - (h0 + gx * (m.x - cx) + gz * (m.z - cz))) * ny;
+      let px = clamp(m.x - nx * sd, x0, x0 + CS), pz = clamp(m.z - nz * sd, z0, z0 + CS);
+      let py = h0 + gx * (px - cx) + gz * (pz - cz);
+      if (m.y < py - 0.02) { px = clamp(m.x, x0, x0 + CS); pz = clamp(m.z, z0, z0 + CS); py = m.y; }
+      let ex = m.x - px, ey = m.y - py, ez = m.z - pz, d2 = ex * ex + ey * ey + ez * ez;
+      if (d2 >= R * R) continue;
+      let cnx, cny, cnz, pen;
+      if (d2 < 1e-10) {
+        // centre inside a column: step up if it is shallow, otherwise out through the nearest side
+        const top = h0 + gx * (m.x - cx) + gz * (m.z - cz);
+        if (top - m.y < 0.5) { cnx = 0; cny = 1; cnz = 0; pen = top + R - m.y; }
+        else {
+          const dl = m.x - x0, dr = x0 + CS - m.x, db = m.z - z0, df = z0 + CS - m.z, mn = Math.min(dl, dr, db, df);
+          cny = 0; cnx = mn === dl ? -1 : mn === dr ? 1 : 0; cnz = mn === db ? -1 : mn === df ? 1 : 0;
+          if (cnx && cnz) cnz = 0;
+          pen = mn + R;
+        }
+      } else {
+        const d = Math.sqrt(d2);
+        cnx = ex / d; cny = ey / d; cnz = ez / d; pen = R - d;
+      }
+      m.x += cnx * pen; m.y += cny * pen; m.z += cnz * pen;
+      const vn = m.vx * cnx + m.vy * cny + m.vz * cnz;
+      if (vn < -2.2) emit(cny > 0.6 ? 'land' : 'thud', m.x, m.y, m.z, -vn / (cny > 0.6 ? 10 : 7));
+      if (cny > 0.6) {
+        if (vn < -SHATTER_V) { kill(m, 'shatter'); return; }
+        m.grounded = 3; m.gmat = mat; m.groundY = m.y;
+      }
+      if (vn < 0) {
+        const e = cny > 0.6 ? (vn < -7 ? 0.25 : 0) : mat === MAT.rail ? 0.45 : 0.3;
+        m.vx -= (1 + e) * vn * cnx; m.vy -= (1 + e) * vn * cny; m.vz -= (1 + e) * vn * cnz;
+      }
+    }
+  }
+}
+function collidePrim(m, p, o) {
+  const R = BALL_R;
+  let cnx, cny, cnz, pen, ovx = 0, ovy = 0, ovz = 0;
+  if (p.cyl) {
+    if (m.y + R < p.y0 || m.y - R > p.y1) return;
+    const dx = m.x - p.x, dz = m.z - p.z, dh = Math.hypot(dx, dz);
+    if (dh > p.r + R) return;
+    const qx = dh <= p.r ? m.x : p.x + dx / dh * p.r, qz = dh <= p.r ? m.z : p.z + dz / dh * p.r, qy = clamp(m.y, p.y0, p.y1);
+    const ex = m.x - qx, ey = m.y - qy, ez = m.z - qz, d = Math.hypot(ex, ey, ez);
+    if (d < 1e-6) { const k = dh > 1e-6 ? 1 / dh : 0; cnx = dx * k || 1; cny = 0; cnz = dz * k; pen = p.r + R - dh; }
+    else { if (d >= R) return; cnx = ex / d; cny = ey / d; cnz = ez / d; pen = R - d; }
+  } else {
+    const cs = Math.cos(p.yaw), sn = Math.sin(p.yaw);
+    const dx = m.x - p.x, dy = m.y - p.y, dz = m.z - p.z;
+    const lx = dx * cs + dz * sn, ly = dy, lz = -dx * sn + dz * cs;
+    if (Math.abs(lx) > p.hx + R || Math.abs(ly) > p.hy + R || Math.abs(lz) > p.hz + R) return;
+    const ex = lx - clamp(lx, -p.hx, p.hx), ey = ly - clamp(ly, -p.hy, p.hy), ez = lz - clamp(lz, -p.hz, p.hz);
+    const d2 = ex * ex + ey * ey + ez * ez;
+    let nlx, nly, nlz;
+    if (d2 > 1e-10) {
+      if (d2 >= R * R) return;
+      const d = Math.sqrt(d2); nlx = ex / d; nly = ey / d; nlz = ez / d; pen = R - d;
+    } else {
+      const px = p.hx - Math.abs(lx), py = p.hy - Math.abs(ly), pz = p.hz - Math.abs(lz);
+      nlx = nly = nlz = 0;
+      if (px <= py && px <= pz) { nlx = Math.sign(lx) || 1; pen = px + R; }
+      else if (py <= pz) { nly = Math.sign(ly) || 1; pen = py + R; }
+      else { nlz = Math.sign(lz) || 1; pen = pz + R; }
+    }
+    cnx = nlx * cs - nlz * sn; cny = nly; cnz = nlx * sn + nlz * cs;
+    if (p.stomp && p.vy < -2 && cny < -0.5) { kill(m, 'squash'); return; }
+    ovx = p.vx; ovy = p.vy; ovz = p.vz;
+    if (p.om) {
+      const rx = m.x - cnx * R - p.px, rz = m.z - cnz * R - p.pz;
+      ovx += -p.om * rz; ovz += p.om * rx;
+    }
+  }
+  m.x += cnx * pen; m.y += cny * pen; m.z += cnz * pen;
+  const rvn = (m.vx - ovx) * cnx + (m.vy - ovy) * cny + (m.vz - ovz) * cnz;
+  if (rvn < -1) emit(p.bump ? 'boing' : 'whack', m.x, m.y, m.z, p.bump ? 1 : -rvn / 7);
+  if (rvn < 0) {
+    let j = -(1 + 0.4) * rvn;
+    if (p.bump) { j = -rvn + Math.max(-rvn * 0.7, 0) + 4.5; o.flash = 1; if (m.isPlayer && mode === 'race' && state === 'racing') rumble(0.2, 0.7, 90); }
+    m.vx += j * cnx; m.vy += j * cny; m.vz += j * cnz;
+  }
+  if (cny > 0.6) { m.grounded = 3; m.gmat = 1; m.groundY = m.y; }
+}
+
+function stepPhysics(dt) {
+  const racingish = state === 'racing' || state === 'finished';
+  const thrusts = marbles.map((m) => {
+    if (state === 'countdown' || state === 'betting' || m.dead > 0) return [0, 0];
+    const auto = state === 'menu' || m.finished || !m.isPlayer || AUTO || testAuto || mode === 'bet';
+    return auto ? aiThrust(m, dt) : playerThrust();
+  });
+  const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
+  for (let sub = 0; sub < n; sub++) {
+    simClock += h;
+    poseObstacles(simClock);
+    for (let i = 0; i < NM; i++) {
+      const m = marbles[i];
+      if (state === 'countdown' || state === 'betting') { m.vx = m.vy = m.vz = 0; continue; }
+      if (m.dead > 0) {
+        if (!m.hidden) { m.vy -= GRAV * h; m.x += m.vx * h; m.y += m.vy * h; m.z += m.vz * h; }
+        continue;
+      }
+      const ground = m.grounded > 0, ice = ground && m.gmat === MAT.ice;
+      const a = ACCEL * (ground ? (ice ? 0.3 : 1) : AIR);
+      m.vx += thrusts[i][0] * a * h; m.vz += thrusts[i][1] * a * h;
+      if (ground && m.gmat >= MAT.boost) {
+        const [bx, bz] = DIRS[m.gmat - MAT.boost]; m.vx += bx * 26 * h; m.vz += bz * 26 * h;
+        if (simClock - (m.boostT || -9) > 0.8) emit('boost', m.x, m.y, m.z, 1);
+        m.boostT = simClock;
+      }
+      m.vy -= GRAV * h;
+      if (ground) { const k = Math.exp(-(ice ? 0.25 : DRAG) * h); m.vx *= k; m.vy *= k; m.vz *= k; }
+      else { const k = Math.exp(-0.12 * h); m.vx *= k; m.vz *= k; }
+      const sp = Math.hypot(m.vx, m.vy, m.vz);
+      if (sp > 24) { m.vx *= 24 / sp; m.vy *= 24 / sp; m.vz *= 24 / sp; }
+      m.x += m.vx * h; m.y += m.vy * h; m.z += m.vz * h;
+      if (m.grounded > 0) m.grounded--;
+      terrainContacts(m);
+      if (m.dead > 0) continue;
+      for (const o of course.obstacles) {
+        if (Math.abs(o.wx - m.x) > 5 || Math.abs(o.wz - m.z) > 5) continue;
+        for (const p of o.prims) { collidePrim(m, p, o); if (m.dead > 0) break; }
+        if (m.dead > 0) break;
+      }
+      if (m.dead > 0) continue;
+      if (m.y < m.groundY - 9) kill(m, 'fell');
+    }
+    // marble on marble
+    for (let i = 0; i < NM; i++) {
+      const a = marbles[i];
+      if (a.dead > 0) continue;
+      for (let j = i + 1; j < NM; j++) {
+        const b = marbles[j];
+        if (b.dead > 0) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d2 = dx * dx + dy * dy + dz * dz, D = 2 * BALL_R;
+        if (d2 >= D * D || d2 < 1e-8) continue;
+        const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, nz = dz / d, pen = (D - d) / 2;
+        a.x -= nx * pen; a.y -= ny * pen; a.z -= nz * pen; b.x += nx * pen; b.y += ny * pen; b.z += nz * pen;
+        const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny + (b.vz - a.vz) * nz;
+        if (rv < -1.2) emit('clack', a.x, a.y, a.z, -rv / 6);
+        if (rv < 0) {
+          const jm = -(1 + 0.8) * rv / 2;
+          a.vx -= jm * nx; a.vy -= jm * ny; a.vz -= jm * nz; b.vx += jm * nx; b.vy += jm * ny; b.vz += jm * nz;
+        }
+      }
+    }
+  }
+  for (const m of marbles) {
+    if (m.dead > 0) {
+      m.dead -= dt;
+      if (m.dead <= 0) respawn(m);
+      continue;
+    }
+    if (m.inv > 0) m.inv -= dt;
+    m.prog = locate(m);
+    if (m.grounded > 0) m.best = Math.max(m.best, m.prog);
+    if (racingish && !m.finished && (m.prog >= course.finishS + 0.6 || (m.grounded > 0 && m.gmat === MAT.finish && m.prog > course.finishS - 40))) {
+      m.finished = true; m.finishTime = raceTime; finishOrder.push(m);
+      if (mode === 'bet') settleBet();
+      else if (m.isPlayer) onPlayerFinish();
+    }
+  }
+  for (const o of course.obstacles) if (o.flash > 0) o.flash = Math.max(0, o.flash - dt * 3);
+}
+
+function placeOnGrid() {
+  const C = course, sh = C.shapes[0];
+  const slots = [];
+  for (const a of [7.5, 5.5, 3.5]) for (const l of [-2.4, -0.8, 0.8, 2.4]) slots.push([a, l]);
+  const order = marbles.slice(1).sort(() => Math.random() - 0.5);
+  order.splice(mode === 'bet' ? Math.floor(Math.random() * NM) : 5, 0, player);
+  // skill scales the AI's speed profile; above 1 it drives faster than the safe line
+  const band = [[0.88, 0.98], [0.98, 1.08], [1.04, 1.14]][difficulty];
+  const nAi = mode === 'bet' ? NM : 10, bb = mode === 'bet' ? [0.88, 1.1] : band;
+  const skills = Array.from({ length: nAi }, (_, k) => bb[0] + (bb[1] - bb[0]) * k / (nAi - 1)).sort(() => Math.random() - 0.5);
+  simClock = 0;
+  poseObstacles(0);
+  order.forEach((m, k) => {
+    const [a, l] = slots[k];
+    m.x = sh.x + sh.dx * a + sh.nx * l; m.z = sh.z + sh.dz * a + sh.nz * l;
+    m.y = (cellTop(m.x, m.z) ?? 0) + BALL_R;
+    m.vx = m.vy = m.vz = 0; m.grounded = 3; m.gmat = 1; m.groundY = m.y;
+    m.dead = 0; m.hidden = false; m.inv = 0; m.falls = 0;
+    m.finished = false; m.finishTime = 0; m.idx = 0;
+    m.prog = locate(m); m.best = m.prog;
+    const ai = m.ai;
+    ai.lane = ai.laneTarget = l; ai.laneTimer = 1 + Math.random() * 3; ai.stuck = 0; ai.stuckProg = 0; ai.brave = 0;
+    ai.wobble = Math.random() * 10;
+    if (!m.isPlayer || mode === 'bet') ai.skill = skills.pop();
+    ai.ignore = new Set();
+    const careless = Math.max(0.03, 1 - ai.skill) * 2.2;
+    for (const o of C.obstacles) if (Math.random() < careless) ai.ignore.add(o.id);
+  });
+  if (mode !== 'bet') player.ai.skill = 0.95;
+  focus = mode === 'bet' ? (bet && bet.pick) || marbles[1] : player;
+  cam.x = focus.x; cam.y = cam.yHold = focus.y; cam.z = focus.z; cam.pitch = PITCH; cam.want = PITCH;
+  wispAnchor.x = focus.x; wispAnchor.y = focus.y; wispAnchor.z = focus.z;
+  finishOrder = [];
+  raceTime = 0;
+  resetFog();
+}
+
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
+const keys = new Set();
+const KEYMAP = { KeyW: 'u', ArrowUp: 'u', KeyS: 'd', ArrowDown: 'd', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
+let dragging = false;
+const ptr = { x: 0, y: 0 };
+canvas.addEventListener('pointerdown', (e) => {
+  dragging = true; ptr.x = e.clientX; ptr.y = e.clientY;
+  canvas.setPointerCapture(e.pointerId); canvas.classList.add('drag');
+});
+canvas.addEventListener('pointermove', (e) => { ptr.x = e.clientX; ptr.y = e.clientY; });
+const endDrag = () => { dragging = false; canvas.classList.remove('drag'); };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  cam.distTarget = Math.min(54, Math.max(14, cam.distTarget * Math.exp(dy * 0.0012)));
+}, { passive: false });
+addEventListener('keydown', (e) => {
+  if (!settingsEl.hidden) { if (e.code === 'Escape') closeSettings(); return; }
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (state === 'countdown' || state === 'racing') setPaused(!paused);
+    else if (state === 'betting' && e.code === 'Escape') showMenu();
+    return;
+  }
+  if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey) return;
+  if (e.code === 'Tab' && mode === 'bet' && (state === 'racing' || state === 'finished' || state === 'countdown')) {
+    e.preventDefault();
+    const order = standings().filter((m) => !m.hidden);
+    focus = order[(order.indexOf(focus) + (e.shiftKey ? order.length - 1 : 1)) % order.length] || focus;
+    return;
+  }
+  const k = KEYMAP[e.code];
+  if (k) { keys.add(k); e.preventDefault(); }
+});
+addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys.delete(k); });
+addEventListener('blur', () => { keys.clear(); endDrag(); if (state === 'racing') setPaused(true); });
+
+// ---- gamepads (standard mapping): sticks and D-pad steer and navigate, A/B/Start act ----
+const pad = { idx: -1, prev: [], lx: 0, ly: 0, ry: 0, dx: 0, dy: 0, navDir: '', navT: 0 };
+const BTN = { A: 0, B: 1, LB: 4, RB: 5, BACK: 8, START: 9, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+addEventListener('gamepadconnected', (e) => {
+  pad.idx = e.gamepad.index;
+  updateHint(); hintEl.style.opacity = '1';
+  setTimeout(() => { if (state !== 'countdown') hintEl.style.opacity = '0'; }, 5000);
+});
+addEventListener('gamepaddisconnected', (e) => {
+  if (e.gamepad.index !== pad.idx) return;
+  pad.idx = -1; pad.lx = pad.ly = pad.ry = pad.dx = pad.dy = 0;
+  updateHint();
+  if (state === 'racing') setPaused(true);
+});
+function currentPad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = pad.idx >= 0 ? pads[pad.idx] : null;
+  if (!gp || !gp.connected) {
+    gp = null;
+    for (const p of pads) if (p && p.connected) { gp = p; pad.idx = p.index; updateHint(); break; }
+  }
+  return gp;
+}
+function rumble(strong, weak, ms) {
+  if (!setOn('rumble')) return;
+  const gp = currentPad(), va = gp && gp.vibrationActuator;
+  if (va && va.playEffect) va.playEffect('dual-rumble', { duration: ms, strongMagnitude: strong, weakMagnitude: weak }).catch(() => {});
+}
+function activeOverlay() {
+  for (const el of [settingsEl, betPanel, pauseEl, results, menu]) if (!el.hidden) return el;
+  return null;
+}
+function navTargets(root) {
+  const cur = document.activeElement;
+  return [...root.querySelectorAll('button, tr[data-i], input[type="range"]')].filter((el) => {
+    if (el.disabled || el.offsetParent === null) return false;
+    // inside a scrolling list, rows scrolled out of view only count once you are already in that list
+    const box = el.closest('.tracks, .oddsWrap, .setBody');
+    if (!box || (cur && box.contains(cur))) return true;
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect(), cy = r.top + r.height / 2;
+    return cy >= b.top && cy <= b.bottom;
+  });
+}
+function focusDefault(root) {
+  const el = root === settingsEl ? settingsEl.querySelector('#setTabs button[aria-pressed="true"]') : root === menu ? $('raceBtn') : root === betPanel ? (document.querySelector('#oddsTable tr.pick') || document.querySelector('#oddsTable tr[data-i]'))
+    : root === pauseEl ? $('resumeBtn') : $('againBtn');
+  if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
+}
+// spatial navigation: the nearest target in the pushed direction, favouring ones in line with the current one
+function moveFocus(root, dx, dy) {
+  document.body.classList.add('pad-nav');
+  const els = navTargets(root), cur = document.activeElement;
+  if (!els.includes(cur)) { focusDefault(root); return; }
+  const r0 = cur.getBoundingClientRect(), cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+  let best = null, bs = Infinity;
+  for (const el of els) {
+    if (el === cur) continue;
+    const r = el.getBoundingClientRect();
+    const vx = r.left + r.width / 2 - cx, vy = r.top + r.height / 2 - cy;
+    const along = vx * dx + vy * dy, across = Math.abs(vx * dy - vy * dx);
+    if (along <= 2) continue;
+    const score = along + across * 2.5;
+    if (score < bs) { bs = score; best = el; }
+  }
+  if (best) { best.focus(); best.scrollIntoView({ block: 'nearest' }); }
+}
+function cycleWatch(step) {
+  const order = standings().filter((m) => !m.hidden);
+  focus = order[(order.indexOf(focus) + step + order.length) % order.length] || focus;
+}
+function pollPad(rawDt) {
+  const gp = currentPad();
+  if (!gp) { pad.lx = pad.ly = pad.ry = pad.dx = pad.dy = 0; return; }
+  const dz = (x, y) => {
+    const m = Math.hypot(x, y);
+    const dz0 = settings.deadzone / 100;
+    if (m < dz0) return [0, 0];
+    const k = Math.min(1, (m - dz0) / (0.95 - dz0)) / m;
+    return [x * k, y * k];
+  };
+  [pad.lx, pad.ly] = dz(gp.axes[0] || 0, gp.axes[1] || 0);
+  pad.ry = dz(gp.axes[2] || 0, gp.axes[3] || 0)[1];
+  const held = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const hit = (i) => held(i) && !pad.prev[i];
+  pad.dx = (held(BTN.RIGHT) ? 1 : 0) - (held(BTN.LEFT) ? 1 : 0);
+  pad.dy = (held(BTN.DOWN) ? 1 : 0) - (held(BTN.UP) ? 1 : 0);
+  const root = activeOverlay();
+  if (root) {
+    // menus: D-pad or stick moves the focus (with key-repeat), A presses, B backs out, Start is the main action
+    const nx = pad.dx || (Math.abs(pad.lx) > 0.55 ? Math.sign(pad.lx) : 0);
+    const ny = pad.dy || (Math.abs(pad.ly) > 0.55 ? Math.sign(pad.ly) : 0);
+    const dir = nx || ny ? `${nx},${ny}` : '';
+    const nav = () => {
+      const ae = document.activeElement;
+      // left / right on a slider changes it; up / down moves on
+      if (ae && ae.type === 'range' && nx && !ny && root.contains(ae)) {
+        const lo = +ae.min, hi = +ae.max, st = Math.max(+ae.step || 1, (hi - lo) / 40);
+        ae.value = clamp(+ae.value + nx * st, lo, hi);
+        ae.dispatchEvent(new Event('input', { bubbles: true }));
+        play('move');
+      } else { moveFocus(root, nx, ny); play('move'); }
+    };
+    if (dir) {
+      if (dir !== pad.navDir) { pad.navT = 0.4; nav(); }
+      else if ((pad.navT -= rawDt) <= 0) { pad.navT = 0.12; nav(); }
+    }
+    pad.navDir = dir;
+    if (hit(BTN.A)) {
+      document.body.classList.add('pad-nav');
+      const el = document.activeElement;
+      if (el && el !== document.body && root.contains(el) && navTargets(root).includes(el)) el.click();
+      else focusDefault(root);
+    }
+    if (hit(BTN.B)) {
+      if (root === settingsEl) closeSettings();
+      else if (root === betPanel) $('betBack').click();
+      else if (root === pauseEl) setPaused(false);
+      else if (root === results) $('menuBtn').click();
+    }
+    if (hit(BTN.START)) {
+      if (root === settingsEl) closeSettings();
+      else if (root === menu) $('raceBtn').click();
+      else if (root === betPanel) { if (!$('betGo').disabled) $('betGo').click(); }
+      else if (root === pauseEl) setPaused(false);
+      else if (root === results) $('againBtn').click();
+    }
+    const now = activeOverlay();
+    if (now && now !== root) requestAnimationFrame(() => { if (document.body.classList.contains('pad-nav')) focusDefault(now); });
+  } else {
+    if (hit(BTN.START) && (state === 'countdown' || state === 'racing')) { setPaused(true); requestAnimationFrame(() => focusDefault(pauseEl)); }
+    if (mode === 'bet') {
+      if (hit(BTN.RB) || hit(BTN.RIGHT)) cycleWatch(1);
+      if (hit(BTN.LB) || hit(BTN.LEFT)) cycleWatch(-1);
+    }
+    if (pad.ry) cam.distTarget = clamp(cam.distTarget * Math.exp(pad.ry * rawDt * 1.6), 14, 54);
+  }
+  for (let i = 0; i < gp.buttons.length; i++) pad.prev[i] = held(i);
+}
+addEventListener('pointerdown', () => document.body.classList.remove('pad-nav'), true);
+addEventListener('mousemove', () => document.body.classList.remove('pad-nav'), true);
+
+function camBasis() {
+  const SP = Math.sin(cam.pitch), CP = Math.cos(cam.pitch);
+  const f = [HX * CP, -SP, HZ * CP];
+  return {
+    pos: [cam.x - f[0] * cam.dist, cam.y - f[1] * cam.dist, cam.z - f[2] * cam.dist],
+    f, r: [-HZ, 0, HX], u: [HX * SP, CP, HZ * SP],
+  };
+}
+function tanHalf() {
+  const a = innerWidth / innerHeight;
+  return a >= 1 ? TAN_HALF : TAN_HALF / Math.max(a, 0.45);
+}
+function worldToScreen(x, y, z) {
+  const b = camBasis(), th = tanHalf();
+  const dx = x - b.pos[0], dy = y - b.pos[1], dz = z - b.pos[2];
+  const zc = dx * b.f[0] + dy * b.f[1] + dz * b.f[2];
+  if (zc < 0.1) return null;
+  const sx = (dx * b.r[0] + dy * b.r[1] + dz * b.r[2]) / (zc * th);
+  const sy = (dx * b.u[0] + dy * b.u[1] + dz * b.u[2]) / (zc * th);
+  return { x: innerWidth / 2 + sx * innerHeight / 2, y: innerHeight / 2 - sy * innerHeight / 2, z: zc };
+}
+function screenToPlane(sx, sy, y) {
+  const b = camBasis(), th = tanHalf(), H = innerHeight;
+  const ux = (2 * sx - innerWidth) / H, uy = -(2 * sy - H) / H;
+  const d = [0, 0, 0];
+  for (let i = 0; i < 3; i++) d[i] = b.f[i] + (b.r[i] * ux + b.u[i] * uy) * th;
+  if (d[1] > -1e-3) d[1] = -1e-3;
+  const t = (y - b.pos[1]) / d[1];
+  return { x: b.pos[0] + d[0] * t, z: b.pos[2] + d[2] * t };
+}
+
+// ---------------------------------------------------------------------------
+// Driving: player input and AI
+// ---------------------------------------------------------------------------
+function clampLen(x, z, max) {
+  const l = Math.hypot(x, z);
+  return l > max ? [x / l * max, z / l * max] : [x, z];
+}
+function playerThrust() {
+  if (dragging) {
+    // joystick: direction from your marble to the pointer, throttle from how far away it is on screen
+    const p = screenToPlane(ptr.x, ptr.y, player.y);
+    const ex = p.x - player.x, ez = p.z - player.z, d = Math.hypot(ex, ez);
+    const sp = worldToScreen(player.x, player.y, player.z);
+    const px = sp ? Math.hypot(ptr.x - sp.x, ptr.y - sp.y) : 999;
+    if (d < 1e-3) return [0, 0];
+    const throttle = Math.min(1, px / (0.14 * Math.min(innerWidth, innerHeight)));
+    return [ex / d * throttle, ez / d * throttle];
+  }
+  // left stick (analog: a half push is half the thrust) or D-pad, in screen directions
+  const sx = clamp(pad.lx + pad.dx, -1, 1), sy = clamp(pad.ly + pad.dy, -1, 1);
+  if (sx || sy) return clampLen(HX * -sy - HZ * sx, HZ * -sy + HX * sx, 1);
+  // screen directions: up = away from the camera
+  const fwd = (keys.has('u') ? 1 : 0) - (keys.has('d') ? 1 : 0);
+  const side = (keys.has('r') ? 1 : 0) - (keys.has('l') ? 1 : 0);
+  if (!fwd && !side) return [0, 0];
+  return clampLen(HX * fwd - HZ * side, HZ * fwd + HX * side, 1);
+}
+
+function aiThrust(m, dt) {
+  const C = course, P = C.path, N = P.n, ai = m.ai;
+  const sp = Math.hypot(m.vx, m.vz);
+  const i0 = m.idx;
+  ai.laneTimer -= dt;
+  const room0 = Math.max(0, P.hw[i0] - 0.8);
+  if (ai.laneTimer <= 0) { ai.laneTimer = 2 + Math.random() * 4; ai.laneTarget = (Math.random() * 2 - 1) * room0 * 0.6; }
+  // stuck (no real progress for a while): push through regardless
+  if ((state === 'racing' || state === 'finished') && !m.finished) {
+    ai.stuck += dt;
+    if (m.prog > ai.stuckProg + 2) { ai.stuck = 0; ai.stuckProg = m.prog; }
+    if (ai.stuck > 3.5) { ai.brave = 2.5; ai.stuck = 0; ai.stuckProg = m.prog; }
+  }
+  if (ai.brave > 0) ai.brave -= dt;
+
+  // pick a lane: score a handful of lanes against what is ahead (posts, bumpers, stompers, marbles)
+  ai.pickT -= dt;
+  if (ai.pickT <= 0) {
+    ai.pickT = 0.15;
+    let bestL = ai.laneTarget, bestC = Infinity;
+    for (let k = 0; k <= 8; k++) {
+      const L = -room0 + room0 * 2 * k / 8;
+      let cost = Math.abs(L - ai.laneTarget) * 0.25 + Math.abs(L - ai.lane) * 0.15;
+      for (const o of C.obstacles) {
+        const dist = o.s - m.prog;
+        if (dist < 0.3 || dist > 6 || ai.ignore.has(o.id) || o.t === 'pusher' || ai.brave > 0) continue;
+        const half = o.t === 'bumper' ? 1.2 : o.t === 'stomper' ? 1.65 : 0.95;
+        if (Math.abs(o.l - L) < half) cost += 12 * (1 - dist / 7.5);
+      }
+      for (const o of marbles) {
+        if (o === m || o.dead > 0) continue;
+        const dp = o.prog - m.prog;
+        if (dp > 0 && dp < 5 && Math.abs(o.lat - L) < 1.3) cost += 2.5 * (1 - dp / 6);
+      }
+      if (cost < bestC) { bestC = cost; bestL = L; }
+    }
+    ai.laneTarget = bestL;
+  }
+  // and time what cannot be dodged
+  let factor = 1;
+  if (ai.brave <= 0) for (const o of C.obstacles) {
+    const dist = o.s - m.prog;
+    if (dist < 0.4 || dist > 8 || ai.ignore.has(o.id)) continue;
+    const ta = dist / Math.max(sp, 4), tw = simClock + ta;
+    if (o.t === 'spinner') {
+      const yaw = o.ph + o.w * tw, bx = Math.cos(yaw), bz = Math.sin(yaw);
+      const rx = o.nx * (ai.lane - o.l), rz = o.nz * (ai.lane - o.l);
+      const along = rx * bx + rz * bz, perp = Math.abs(-rx * bz + rz * bx);
+      if (Math.abs(along) < o.len + 0.7 && perp < 1.1) factor = Math.min(factor, dist > 1.6 ? 0 : 0.3);
+    } else if (o.t === 'pusher') {
+      const pl = o.amp * Math.sin(o.w * tw + o.ph);
+      if (Math.abs(pl - ai.lane) < 1.7) factor = Math.min(factor, 0.35);
+    } else if (o.t === 'stomper' && dist > 1.2 && Math.abs(o.l - ai.lane) < 1.6) {
+      const v5 = Math.max(sp, 5), t0 = simClock + Math.max(0, dist - 1.8) / v5, t1 = simClock + (dist + 1.8) / v5;
+      for (let k = 0; k <= 6; k++) if (stomperLift(t0 + (t1 - t0) * k / 6, o.ph)[0] < 1.5) { factor = 0; break; }
+    }
+  }
+  ai.lane += (ai.laneTarget - ai.lane) * (1 - Math.exp(-dt * 2));
+  const look = (ai.brave > 0 ? 4 : 1.4) + sp * 0.3, steps = Math.max(1, Math.round(look / P.ds));
+  const it = Math.min(N - 1, i0 + steps);
+  const roomT = Math.max(0, P.hw[it] - 0.8);
+  const sloppy = Math.max(0.02, 1 - ai.skill);
+  ai.wobble += dt * (1.3 + sloppy * 4);
+  const wob = Math.sin(ai.wobble) * sloppy * 1.2;
+  const lane = clamp(ai.lane + (ai.brave > 0 ? 0 : wob), -roomT, roomT);
+  const tx = P.x[it] + P.nx[it] * lane, tz = P.z[it] + P.nz[it] * lane;
+  let vt = Infinity, gap = false;
+  for (let k = 0; k <= steps + 6; k++) { const j = Math.min(N - 1, i0 + k); vt = Math.min(vt, P.vprof[j]); gap = gap || P.gapNear[j] === 1; }
+  let rubber = 1;
+  if (mode === 'race' && !m.isPlayer && (state === 'racing' || state === 'finished') && !player.finished) {
+    rubber = 1 + clamp((player.prog - m.prog) / 60, 0, 1) * 0.05;   // only catch-up: leaders never wait for you
+  }
+  vt *= m.ai.skill * rubber;
+  if (gap) vt = Math.max(vt, 9.5);
+  vt *= factor;
+  if (m.finished) vt = Math.min(vt, Math.max(0, C.L - 3 - m.prog) * 1.2);
+  const dx = tx - m.x, dz = tz - m.z, dl = Math.hypot(dx, dz) || 1;
+  return clampLen((dx / dl * vt - m.vx) * 2.5, (dz / dl * vt - m.vz) * 2.5, 1);
+}
+
+// ---------------------------------------------------------------------------
+// HUD, menu, results
+// ---------------------------------------------------------------------------
+const hud = $('hud'), menu = $('menu'), results = $('results'), pauseEl = $('pause'), banner = $('banner');
+const hintEl = $('hint');
+const fmtTime = (t) => {
+  if (!isFinite(t)) return '–';
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return `${m}:${s < 10 ? '0' : ''}${s.toFixed(1)}`;
+};
+const suffix = (n) => (n % 100 >= 11 && n % 100 <= 13) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th';
+let bannerTimer = 0;
+function flash(text, secs, small = false, warn = false) {
+  banner.textContent = text;
+  banner.classList.toggle('small', small);
+  banner.classList.toggle('warn', warn);
+  banner.classList.add('show');
+  bannerTimer = secs;
+}
+function standings() {
+  return marbles.slice().sort((a, b) => {
+    if (a.finished && b.finished) return a.finishTime - b.finishTime;
+    if (a.finished !== b.finished) return a.finished ? -1 : 1;
+    return b.prog - a.prog;
+  });
+}
+const stEl = $('standings');
+const stRows = marbles.map(() => { const li = document.createElement('li'); stEl.appendChild(li); return li; });
+let hudT = 0;
+function updateHud(dt) {
+  hudT -= dt;
+  if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) banner.classList.remove('show'); }
+  if (hudT > 0 || state === 'menu' || state === 'loading' || state === 'betting') return;
+  hudT = 0.1;
+  if (mode === 'bet' && bet && bet.pick) $('hBet').textContent = `${bet.stake} on ${bet.pick.name} ${bet.type === 'win' ? 'to win' : 'top 3'} ×${bet.odds.toFixed(1)}`;
+  const me = mode === 'bet' && bet ? bet.pick : player;
+  const order = standings(), pos = order.indexOf(me) + 1;
+  $('hPos').textContent = pos; $('hSuf').textContent = suffix(pos);
+  $('hTime').textContent = fmtTime(me.finished ? me.finishTime : raceTime);
+  $('hFalls').textContent = me.falls;
+  $('hBar').style.width = `${clamp(me.prog / course.finishS, 0, 1) * 100}%`;
+  const lead = order[0];
+  order.forEach((m, k) => {
+    const li = stRows[k];
+    let gap = '';
+    if (m.finished) gap = k === 0 ? fmtTime(m.finishTime) : '+' + (m.finishTime - lead.finishTime).toFixed(1);
+    else if (k > 0) gap = `−${Math.max(0, Math.round((lead.finished ? course.finishS : lead.prog) - m.prog))} m`;
+    li.className = (m === me ? 'me' : '') + (m.dead > 0 ? ' out' : '') + (mode === 'bet' && m === focus ? ' watch' : '');
+    li.dataset.i = m.id;
+    li.innerHTML = `<span class="n">${k + 1}</span><i style="background:${m.css}"></i><span>${m.name}</span><span class="g">${gap}</span>`;
+  });
+  if (resultsShown) fillResults();
+}
+function fillResults() {
+  const order = standings(), pos = order.indexOf(player) + 1;
+  if (mode === 'bet' && bet) {
+    const p = bet.pick, what = bet.type === 'win' ? 'to win' : 'to finish top three';
+    $('resTitle').textContent = bet.won ? `${p.name} came through! +${bet.payout} coins` : `${order[0].name} wins · bet lost`;
+    $('resSub').textContent = `${course.def.name} · ${bet.stake} on ${p.name} ${what} at ×${bet.odds.toFixed(1)} · you have ${wallet} coins`;
+  } else {
+    $('resTitle').textContent = `You finished ${pos}${suffix(pos)}`;
+    $('resSub').textContent = `${course.def.name} · ${fmtTime(player.finishTime)} · ${player.falls} fall${player.falls === 1 ? '' : 's'}`;
+  }
+  const me = mode === 'bet' && bet ? bet.pick : player;
+  $('resTable').innerHTML = order.map((m, k) =>
+    `<tr class="${m === me ? 'me' : ''}"><td>${k + 1}</td><td><i style="background:${m.css}"></i>${m.name}</td>` +
+    `<td class="f">${m.falls ? m.falls + ' fall' + (m.falls > 1 ? 's' : '') : ''}</td>` +
+    `<td>${m.finished ? fmtTime(m.finishTime) : 'rolling…'}</td></tr>`).join('');
+}
+function onPlayerFinish() {
+  const pos = standings().indexOf(player) + 1;
+  flash(pos === 1 ? 'YOU WIN!' : `${pos}${suffix(pos)} PLACE`, 2.4);
+  play(pos === 1 ? 'win' : 'finish');
+  state = 'finished';
+  resultsTimer = 2.4;
+}
+function setPaused(p) {
+  paused = p;
+  pauseEl.hidden = !p;
+  setVolumes();
+  if (p) keys.clear();
+}
+function showMenu() {
+  setPaused(false);
+  results.hidden = true; resultsShown = false; betPanel.hidden = true;
+  hud.hidden = true; menu.hidden = false;
+  banner.classList.remove('show');
+  state = 'menu';
+  placeOnGrid();
+}
+function startRace() {
+  menu.hidden = true; results.hidden = true; resultsShown = false; setPaused(false);
+  if (mode === 'bet' && !testAuto) { openBetting(); return; }
+  hud.hidden = false;
+  placeOnGrid();
+  beginCountdown();
+}
+function beginCountdown() {
+  state = 'countdown'; countdown = 3;
+  hintEl.style.opacity = '1';
+  setTimeout(() => { hintEl.style.opacity = '0'; }, 7000);
+}
+
+// ---- betting ----
+const betPanel = $('betPanel');
+const ODDS_K = 10;            // how strongly skill decides a race (fitted to 176 simulated races)
+// win and top-three chances from skill: sample finishing orders where stronger marbles tend to come first
+function computeOdds() {
+  const w = marbles.map((m) => Math.exp(ODDS_K * m.ai.skill));
+  const win = new Float64Array(NM), pod = new Float64Array(NM), N = 20000, rem = new Float64Array(NM);
+  for (let n = 0; n < N; n++) {
+    let tot = 0;
+    for (let i = 0; i < NM; i++) { rem[i] = w[i]; tot += w[i]; }
+    for (let place = 0; place < 3; place++) {
+      let r = Math.random() * tot, i = 0;
+      for (; i < NM - 1; i++) { r -= rem[i]; if (r <= 0 && rem[i] > 0) break; }
+      if (place === 0) win[i]++;
+      pod[i]++; tot -= rem[i]; rem[i] = 0;
+    }
+  }
+  // the house keeps about 10%
+  const price = (p) => Math.max(1.1, Math.min(60, Math.round(0.9 / Math.max(p, 1e-3) * 10) / 10));
+  marbles.forEach((m, i) => { m.odds = { win: price(win[i] / N), podium: price(pod[i] / N) }; });
+}
+function openBetting() {
+  hud.hidden = true;
+  let note = '';
+  if (wallet < 10) { wallet = 100; saveWallet(); note = 'Out of coins, so the house spots you 100.'; }
+  bet = { pick: null, type: bet ? bet.type : 'win', stake: bet ? bet.stake : 25, odds: 0 };
+  placeOnGrid();
+  computeOdds();
+  state = 'betting';
+  $('betNote').textContent = note;
+  $('betSub').textContent = `${course.def.name} · ${'●'.repeat(course.def.level)} · ${Math.round(course.L)} m`;
+  renderBet();
+  betPanel.hidden = false;
+}
+function stakeValue() { return bet.stake === 'all' ? wallet : Math.min(+bet.stake, wallet); }
+function renderBet() {
+  const fr = document.activeElement && document.activeElement.closest && document.activeElement.closest('#oddsTable tr[data-i]');
+  const keepFocus = fr ? fr.dataset.i : null;
+  $('walletBet').textContent = wallet;
+  const rows = marbles.slice().sort((a, b) => a.odds[bet.type] - b.odds[bet.type]);
+  const lo = Math.min(...marbles.map((m) => m.ai.skill)), hi = Math.max(...marbles.map((m) => m.ai.skill));
+  $('oddsTable').innerHTML = `<tr><th></th><th>Marble</th><th>Form</th><th>Pays</th></tr>` + rows.map((m) =>
+    `<tr data-i="${m.id}" tabindex="0" class="${bet.pick === m ? 'pick' : ''}"><td><i style="background:${m.css}"></i></td><td>${m.name}</td>` +
+    `<td class="form"><span style="width:${Math.round(20 + 80 * (m.ai.skill - lo) / Math.max(1e-6, hi - lo))}%"></span></td>` +
+    `<td class="o">×${m.odds[bet.type].toFixed(1)}</td></tr>`).join('');
+  document.querySelectorAll('#stakeSeg button').forEach((b) => {
+    const v = b.dataset.s;
+    b.disabled = v !== 'all' && +v > wallet;
+    b.setAttribute('aria-pressed', String(String(bet.stake) === v));
+  });
+  if (bet.stake !== 'all' && +bet.stake > wallet) bet.stake = 'all';
+  const go = $('betGo'), st = stakeValue();
+  go.disabled = !bet.pick || st <= 0;
+  go.textContent = bet.pick ? `BET ${st} · WIN ${Math.round(st * bet.pick.odds[bet.type])}` : 'PICK A MARBLE';
+  if (keepFocus !== null) { const r = document.querySelector(`#oddsTable tr[data-i="${keepFocus}"]`); if (r) r.focus(); }
+}
+$('oddsTable').addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('tr[data-i]')) { e.preventDefault(); e.target.click(); }
+});
+$('oddsTable').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-i]');
+  if (!tr) return;
+  bet.pick = marbles[+tr.dataset.i]; focus = bet.pick;
+  renderBet();
+});
+document.querySelectorAll('#betTypeSeg button').forEach((b) => b.addEventListener('click', () => {
+  bet.type = b.dataset.t;
+  document.querySelectorAll('#betTypeSeg button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  renderBet();
+}));
+document.querySelectorAll('#stakeSeg button').forEach((b) => b.addEventListener('click', () => {
+  if (b.disabled) return;
+  bet.stake = b.dataset.s === 'all' ? 'all' : +b.dataset.s;
+  renderBet();
+}));
+$('betBack').addEventListener('click', showMenu);
+$('betGo').addEventListener('click', () => {
+  if (!bet.pick) return;
+  bet.stake = stakeValue(); bet.odds = bet.pick.odds[bet.type]; bet.won = undefined; bet.payout = 0;
+  wallet -= bet.stake; saveWallet();
+  betPanel.hidden = true; hud.hidden = false;
+  focus = bet.pick;
+  beginCountdown();
+});
+// a bet is settled as soon as its outcome is certain; the race carries on behind the results
+function settleBet() {
+  if (!bet || bet.won !== undefined || state !== 'racing') return;
+  const place = finishOrder.indexOf(bet.pick) + 1;
+  let won = null;
+  if (bet.type === 'win') { if (finishOrder.length) won = finishOrder[0] === bet.pick; }
+  else if (place) won = place <= 3;
+  else if (finishOrder.length >= 3) won = false;
+  if (won === null) return;
+  bet.won = won; bet.payout = won ? Math.round(bet.stake * bet.odds) : 0;
+  wallet += bet.payout; saveWallet();
+  flash(won ? `+${bet.payout} COINS` : `${finishOrder[0].name.toUpperCase()} WINS`, 2.4, !won, !won);
+  play(won ? 'coins' : 'lose'); if (won) play('win');
+  state = 'finished';
+  resultsTimer = 2.4;
+}
+function updateHint() {
+  const padOn = pad.idx >= 0;
+  if (mode === 'bet') hintEl.innerHTML = padOn ? '<b>LB</b> / <b>RB</b> to watch another marble · right stick to zoom · <b>Start</b> to pause'
+    : 'Press <b>Tab</b> or click a name in the standings to watch another marble · scroll to zoom · <b>Esc</b> to pause';
+  else hintEl.innerHTML = padOn ? 'Left stick to roll · right stick to zoom · <b>Start</b> to pause'
+    : 'Drag to roll · <b>WASD</b> / arrows · scroll to zoom · <b>Esc</b> to pause';
+}
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('#modeSeg button').forEach((o) => o.setAttribute('aria-pressed', String(o.dataset.m === m)));
+  $('rivalsBox').hidden = m === 'bet'; $('walletBox').hidden = m !== 'bet';
+  $('helpRace').hidden = m === 'bet'; $('helpBet').hidden = m !== 'bet';
+  $('walletMenu').textContent = wallet;
+  $('raceBtn').textContent = m === 'bet' ? 'PLACE A BET' : 'RACE';
+  $('againBtn').textContent = m === 'bet' ? 'BET AGAIN' : 'RACE AGAIN';
+  $('hBetRow').hidden = m !== 'bet';
+  player.name = m === 'bet' ? 'Chrome' : 'You';
+  tags[0].innerHTML = m === 'bet' ? `<i style="background:${player.css}"></i>Chrome` : 'YOU';
+  stEl.classList.toggle('clickable', m === 'bet');
+  updateHint();
+}
+document.querySelectorAll('#modeSeg button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.m)));
+stEl.addEventListener('click', (e) => {
+  const li = e.target.closest('li[data-i]');
+  if (li && mode === 'bet') focus = marbles[+li.dataset.i];
+});
+$('raceBtn').addEventListener('click', () => { if (course) startRace(); });
+$('setBtn').addEventListener('click', () => openSettings(menu));
+$('pauseSetBtn').addEventListener('click', () => openSettings(pauseEl));
+$('againBtn').addEventListener('click', startRace);
+$('menuBtn').addEventListener('click', showMenu);
+$('resumeBtn').addEventListener('click', () => setPaused(false));
+$('restartBtn').addEventListener('click', startRace);
+$('quitBtn').addEventListener('click', showMenu);
+document.querySelectorAll('#diffSeg button').forEach((b) => b.addEventListener('click', () => {
+  difficulty = +b.dataset.d;
+  document.querySelectorAll('#diffSeg button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+}));
+
+// ---- maps: the course seen from above, turned to match the camera ----
+const ISO = Math.SQRT1_2;
+function courseImage(C) {
+  const cv = document.createElement('canvas');
+  cv.width = C.gw; cv.height = C.gh;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(C.gw, C.gh), th = C.theme;
+  const span = Math.max(1, C.yMax - C.yMin);
+  const to255 = (v) => Math.max(0, Math.min(255, Math.round(Math.pow(Math.min(1, v), 1 / 2.2) * 255)));
+  for (let j = 0; j < C.gh; j++) for (let i = 0; i < C.gw; i++) {
+    const o = (j * C.gw + i) * 4, mat = C.grid[o + 3];
+    if (mat < 0.5) continue;
+    const k = 0.45 + 0.55 * (C.grid[o] - C.yMin) / span;
+    let c = mat === MAT.rail ? th.rail : mat === MAT.finish ? [0.95, 0.95, 0.95] : mat >= MAT.boost ? th.accent : mat === MAT.ice ? [0.6, 0.85, 1] : th.tileA;
+    if (mat === MAT.floor || mat === MAT.start) c = c.map((v, q) => v * 0.6 + th.tileB[q] * 0.4);
+    img.data[o] = to255(c[0] * k); img.data[o + 1] = to255(c[1] * k); img.data[o + 2] = to255(c[2] * k); img.data[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+function isoFit(C, w, h, pad) {
+  let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+  const P = C.path;
+  for (let i = 0; i < P.n; i += 2) {
+    const u = (P.x[i] - P.z[i]) * ISO, v = (P.x[i] + P.z[i]) * ISO, m = P.hw[i] + 1.5;
+    u0 = Math.min(u0, u - m); u1 = Math.max(u1, u + m); v0 = Math.min(v0, v - m); v1 = Math.max(v1, v + m);
+  }
+  const sc = Math.min((w - pad * 2) / (u1 - u0), (h - pad * 2) / (v1 - v0));
+  return { sc, ox: w / 2 - (u0 + u1) / 2 * sc, oy: h / 2 - (v0 + v1) / 2 * sc };
+}
+const isoPt = (X, x, z) => [X.ox + (x - z) * ISO * X.sc, X.oy + (x + z) * ISO * X.sc];
+function drawCourse(ctx, C, X) {
+  ctx.save();
+  const k = X.sc * ISO;
+  ctx.setTransform(k, k, -k, k, X.ox, X.oy);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(C.image, C.ox, C.oz, C.gw * CS, C.gh * CS);
+  ctx.restore();
+}
+
+// the menu lists every course, easiest first; a course is only fully built when it is picked
+const catalog = COURSES.map((def, k) => ({ def, k })).sort((a, b) => a.def.level - b.def.level || a.k - b.k);
+const listEl = $('trackList'), infoEl = $('courseInfo');
+const dotsHtml = (n) => '●'.repeat(n) + `<s>${'●'.repeat(4 - n)}</s>`;
+let levelFilter = 0;
+catalog.forEach((e, i) => {
+  const b = document.createElement('button');
+  b.className = 'trk'; b.setAttribute('aria-pressed', 'false');
+  const cv = document.createElement('canvas');
+  cv.width = 240; cv.height = 120;
+  b.appendChild(cv);
+  b.insertAdjacentHTML('beforeend', `<span class="ttl"><b>${e.def.name}</b><span class="dots">${dotsHtml(e.def.level)}</span></span>`);
+  listEl.appendChild(b);
+  e.btn = b; e.cv = cv;
+  b.addEventListener('click', () => selectCourse(i));
+});
+function showInfo(e) {
+  infoEl.innerHTML = `<b>${e.def.name}</b><span class="dots">${dotsHtml(e.def.level)}</span>${e.L ? Math.round(e.L) + ' m · ' : ''}${e.def.blurb || ''}`;
+}
+function applyFilter() {
+  let n = 0;
+  catalog.forEach((e) => { const show = !levelFilter || e.def.level === levelFilter; e.btn.hidden = !show; n += show; });
+  $('courseCount').textContent = `${n} course${n === 1 ? '' : 's'}`;
+}
+document.querySelectorAll('#lvlSeg button').forEach((b) => b.addEventListener('click', () => {
+  levelFilter = +b.dataset.l;
+  document.querySelectorAll('#lvlSeg button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  applyFilter();
+}));
+applyFilter();
+function thumb(e, C) {
+  if (!e.image) { e.image = C.image || courseImage(C); e.L = C.L; }
+  const ctx = e.cv.getContext('2d');
+  ctx.clearRect(0, 0, e.cv.width, e.cv.height);
+  drawCourse(ctx, { ...C, image: e.image }, isoFit(C, e.cv.width, e.cv.height, 6));
+}
+// thumbnails fill in a few per frame so the menu is usable straight away
+(async () => {
+  for (const e of catalog) {
+    if (!e.image) { const C = buildCourse(e.def); thumb(e, C); }
+    if (catalog[courseIndex] === e) showInfo(e);
+    await yieldFrame();
+  }
+})();
+
+const mm = $('minimap'), mmCtx = mm.getContext('2d');
+let mmXf = null;
+function drawMinimap() {
+  if (hud.hidden || mm.hidden) return;
+  const r = mm.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  const W = Math.max(1, Math.round(r.width * dpr)), H = Math.max(1, Math.round(r.height * dpr));
+  if (mm.width !== W || mm.height !== H || !mmXf || mmXf.C !== course) {
+    mm.width = W; mm.height = H;
+    mmXf = isoFit(course, W, H, 10 * dpr); mmXf.C = course; mmXf.dpr = dpr;
+  }
+  mmCtx.clearRect(0, 0, W, H);
+  drawCourse(mmCtx, course, mmXf);
+  for (let i = NM - 1; i >= 0; i--) {
+    const m = marbles[i];
+    if (m.hidden) continue;
+    const [x, y] = isoPt(mmXf, m.x, m.z);
+    mmCtx.beginPath();
+    mmCtx.arc(x, y, (m.isPlayer ? 4.2 : 2.8) * dpr, 0, 7);
+    mmCtx.fillStyle = m.css; mmCtx.fill();
+    if (m.isPlayer) { mmCtx.lineWidth = 1.5 * dpr; mmCtx.strokeStyle = '#0a0f18'; mmCtx.stroke(); }
+  }
+}
+
+// labels
+const labelsEl = $('labels');
+const tags = marbles.map((m) => {
+  const d = document.createElement('div');
+  d.className = 'tag' + (m.isPlayer ? ' you' : '');
+  d.innerHTML = m.isPlayer ? 'YOU' : `<i style="background:${m.css}"></i>${m.name}`;
+  labelsEl.appendChild(d);
+  return d;
+});
+function updateLabels() {
+  marbles.forEach((m, i) => {
+    const el = tags[i], sp = worldToScreen(m.x, m.y + 0.95, m.z);
+    const mineTag = mode === 'bet' ? bet && m === bet.pick : m.isPlayer;
+    if (!sp || state === 'loading' || m.hidden || m.dead > 0 || settings.tags === 'off' || (settings.tags === 'mine' && !mineTag)) { el.style.opacity = '0'; return; }
+    const fade = Math.max(0, Math.min(1, (70 - sp.z) / 20));
+    const mine = mode === 'bet' ? bet && m === bet.pick : m.isPlayer;
+    el.classList.toggle('you', !!mine);
+    el.style.opacity = String(mine ? Math.min(fade, 0.92) : fade * 0.85);
+    el.style.transform = `translate(${sp.x.toFixed(1)}px, ${sp.y.toFixed(1)}px) translate(-50%, -100%)`;
+  });
+}
+
+function selectCourse(i) {
+  courseIndex = i;
+  const e = catalog[i];
+  const C = buildCourse(e.def);
+  C.image = e.image || courseImage(C);
+  initObstacles(C);
+  if (!e.image) thumb(e, C);
+  showInfo(e);
+  catalog.forEach((o) => o.btn.setAttribute('aria-pressed', String(o === e)));
+  course = C;
+  uploadCourse(C);
+  mmXf = null;
+  const f = C.def.fog;
+  if (f) {
+    for (const k of ['thickness', 'height', 'wind', 'refill', 'swirl']) sliders[k](f[k]);
+    windDir = [Math.cos(f.windAngle), Math.sin(f.windAngle)];
+  }
+  if (state === 'loading' || state === 'menu') { state = 'menu'; placeOnGrid(); }
+}
+{
+  const q = parseInt(QS.get('course'), 10);
+  const start = q >= 1 && q <= catalog.length ? q - 1 : 0;
+  selectCourse(start);
+  requestAnimationFrame(() => catalog[start].btn.scrollIntoView({ block: 'nearest' }));
+}
+
+// ---------------------------------------------------------------------------
+// Camera and wisps
+// ---------------------------------------------------------------------------
+function updateCamera(dt) {
+  const P = course.path, i = Math.min(P.n - 1, focus.idx + 6);
+  const alive = focus.dead <= 0 && focus.y > focus.groundY - 1.5;
+  if (alive) cam.yHold = focus.y;
+  const tx = focus.x + P.tx[i] * 2.2, tz = focus.z + P.tz[i] * 2.2;
+  const c = 1 - Math.exp(-dt * (alive ? 4 : 1.5));
+  if (alive || focus.dead <= 0) { cam.x += (tx - cam.x) * c; cam.z += (tz - cam.z) * c; }
+  cam.y += (cam.yHold - cam.y) * (1 - Math.exp(-dt * 3));
+  cam.dist += (cam.distTarget - cam.dist) * (1 - Math.exp(-dt * 6));
+  // down in a pit or a channel the walls can hide your marble: look more steeply down until it is in view
+  cam.pitchT -= dt;
+  if (cam.pitchT <= 0 && focus.dead <= 0) {
+    cam.pitchT = 0.1;
+    let want = PITCHES[PITCHES.length - 1];
+    for (const pa of PITCHES) if (sightClear(pa)) { want = pa; break; }
+    cam.want = want;
+  }
+  if (cam.want !== undefined) cam.pitch += (cam.want - cam.pitch) * (1 - Math.exp(-dt * (cam.want > cam.pitch ? 3 : 1.2)));
+}
+function sightClear(pa) {
+  const ux = -HX * Math.cos(pa), uy = Math.sin(pa), uz = -HZ * Math.cos(pa);
+  for (const [ox, oy] of [[0, 0.1], [0, 0.6]]) {
+    for (let t = 0.8; t < cam.dist; t += 0.4) {
+      const x = focus.x + ux * t, yy = focus.y + oy + uy * t, z = focus.z + uz * t;
+      const top = cellTop(x, z);
+      if (top !== null && top > yy) return false;
+    }
+  }
+  return true;
+}
+function updateWisps(dt) {
+  const wa = 1 - Math.exp(-dt * 0.8);
+  wispAnchor.x += (focus.x - wispAnchor.x) * wa; wispAnchor.z += (focus.z - wispAnchor.z) * wa;
+  wispAnchor.y += (fogRefAt(wispAnchor.x, wispAnchor.z) - wispAnchor.y) * wa;
+  const t = simTime;
+  wisps.forEach((w, i) => {
+    const ph = w.ph;
+    const ox = 4.0 * Math.sin(t * 0.13 * (1 + i * 0.17) + ph) + 1.5 * Math.sin(t * 0.31 + ph * 1.7);
+    const oz = 4.0 * Math.cos(t * 0.11 * (1 + i * 0.21) + ph * 1.3) + 1.5 * Math.cos(t * 0.27 + ph);
+    wispPos[i * 3] = wispAnchor.x + ox;
+    wispPos[i * 3 + 1] = wispAnchor.y + params.height * (0.6 + 0.16 * Math.sin(t * 0.4 + ph * 2.3));
+    wispPos[i * 3 + 2] = wispAnchor.z + oz;
+    const flick = 0.86 + 0.08 * Math.sin(t * 11.3 + ph * 5) + 0.05 * Math.sin(t * 27.1 + ph) + 0.03 * Math.sin(t * 47.3 + ph * 2);
+    for (let j = 0; j < 3; j++) wispCol[i * 3 + j] = w.col[j] * w.power * flick;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Resolution
+// ---------------------------------------------------------------------------
+// ---- frame-rate governor ----
+// Finds the display's refresh rate, reads the GPU's time per frame, and renders as many pixels as fit in that budget:
+// native resolution where there is headroom (up to a device pixel ratio of 2), fewer where there is not.
+const gov = { p: 0, pMin: 0, hz: 60, budget: 1000 / 60, iv: [], hzT: 0, t: 0, late: 0, n: 0, lockUp: 0, native: 1, fixed: 0 };
+function nativeSize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  return [innerWidth * dpr, innerHeight * dpr];
+}
+function applySize() {
+  const [w, h] = nativeSize();
+  gov.native = Math.min(w * h, MAX_PIXELS);
+  gov.pMin = Math.min(1, 0.5e6 / gov.native);
+  if (FIXED_SCALE) gov.p = FIXED_SCALE * FIXED_SCALE;
+  else if (gov.fixed) gov.p = gov.fixed;                        // the player chose a resolution
+  else if (!gov.p || gov.wasFixed) gov.p = Math.min(1, 2.4e6 / gov.native);   // a safe start; the governor takes it from here
+  gov.wasFixed = !!gov.fixed;
+  const s = Math.sqrt(gov.p * gov.native / (w * h));
+  const W = Math.max(1, Math.round(w * s)), H = Math.max(1, Math.round(h * s));
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+}
+addEventListener('resize', applySize);
+applySize();
+// refresh rate from the quick end of recent animation-frame intervals (dropped frames do not fool it)
+function trackRefresh(ms) {
+  if (!(ms > 0) || ms > 100) return;
+  gov.iv.push(ms); if (gov.iv.length > 240) gov.iv.shift();
+  gov.hzT += ms;
+  if (gov.hzT > 1000 && gov.iv.length >= 30) {
+    gov.hzT = 0;
+    const sorted = gov.iv.slice().sort((a, b) => a - b), hz = 1000 / sorted[Math.floor(sorted.length * 0.1)];
+    gov.hz = [60, 75, 90, 100, 120, 144, 165, 240].reduce((a, b) => (Math.abs(b - hz) < Math.abs(a - hz) ? b : a));
+  }
+  gov.budget = 1000 / Math.min(gov.hz, settings.fps === '60' ? 60 : Infinity);
+}
+function governor(ms, now) {
+  if (!(ms > 0) || ms > 100) return;                 // hidden tab, a hitch, the first frame
+  gov.n++; if (ms > gov.budget * 1.5) gov.late++;
+  gov.t += ms;
+  if (gov.t < 500 || FIXED_SCALE || gov.fixed) return;
+  const lateFrac = gov.late / gov.n;
+  gov.t = 0; gov.late = 0; gov.n = 0;
+  let want = gov.p;
+  const gpu = perf.gpuEma;
+  if (gpu > 0) {
+    // keep the GPU at about 70% of the frame budget, leaving room for the browser and the compositor
+    const ratio = gov.budget * 0.7 / gpu;
+    if (ratio < 0.9) want = gov.p * Math.max(0.6, ratio);
+    else if (ratio > 1.2 && now > gov.lockUp) want = gov.p * Math.min(1.25, ratio);
+    if (lateFrac > 0.2 && ratio >= 0.9) { want = gov.p * 0.85; gov.lockUp = now + 5000; }   // late for some other reason
+    // fog quality is the last lever, once the resolution is already at its floor
+    if (course && course.def.fog) {
+      if (ratio < 0.9 && gov.p <= gov.pMin * 1.01) fogSteps = Math.max(24, fogSteps - 8);
+      else if (ratio > 1.4 && fogSteps < fogMax) fogSteps = Math.min(fogMax, fogSteps + 8);
+    }
+  } else if (lateFrac > 0.08) { want = gov.p * 0.85; gov.lockUp = now + 8000; }   // no GPU timer: go by late frames
+  else if (lateFrac === 0 && now > gov.lockUp) want = gov.p * 1.08;
+  want = clamp(want, gov.pMin, 1);
+  if (Math.abs(want - gov.p) / gov.p > 0.03) {
+    if (gpu > 0) perf.gpuEma *= want / gov.p;       // expected cost at the new size, until fresh readings arrive
+    gov.p = want;
+    applySize();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GPU passes
+// ---------------------------------------------------------------------------
+function bindTex(prog, name, unit, tex) {
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform1i(U(prog, name), unit);
+}
+function draw(target) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fb : null);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+function simulate(dt, winMin) {
+  gl.viewport(0, 0, SIM_N, SIM_N);
+  const wx = windDir[0] * params.wind, wz = windDir[1] * params.wind;
+  marbles.forEach((m, i) => {
+    const off = m.dead > 0 || m.y < fogRefAt(m.x, m.z) - 2;
+    ballsU.set(off ? [1e5, 1e5, 0, 0] : [m.x - airShift[0], m.z - airShift[1], m.vx - wx, m.vz - wz], i * 4);
+  });
+  let p = PR.advect; gl.useProgram(p.p);
+  bindTex(p, 'uPrev', 0, stateCur.t);
+  gl.uniform2f(U(p, 'uWinMin'), winMin[0], winMin[1]);
+  gl.uniform2f(U(p, 'uPrevWinMin'), prevWinMin[0], prevWinMin[1]);
+  gl.uniform4fv(U(p, 'uBalls'), ballsU);
+  gl.uniform1f(U(p, 'uDt'), dt);
+  gl.uniform1f(U(p, 'uRefill'), params.refill);
+  draw(stateTmp);
+
+  p = PR.vort; gl.useProgram(p.p);
+  bindTex(p, 'uV', 0, stateTmp.t);
+  gl.uniform1f(U(p, 'uDt'), dt);
+  gl.uniform1f(U(p, 'uSwirl'), params.swirl);
+  draw(stateCur);
+
+  // warm start: presA still holds the last step's pressure
+  p = PR.jacobi; gl.useProgram(p.p);
+  bindTex(p, 'uV', 1, stateCur.t);
+  for (let i = 0; i < JACOBI; i++) {
+    bindTex(p, 'uP', 0, presA.t);
+    draw(presB);
+    [presA, presB] = [presB, presA];
+  }
+
+  p = PR.grad; gl.useProgram(p.p);
+  bindTex(p, 'uV', 0, stateCur.t);
+  bindTex(p, 'uP', 1, presA.t);
+  draw(stateTmp);
+  [stateCur, stateTmp] = [stateTmp, stateCur];
+}
+function gatherObstacles() {
+  const all = [];
+  for (const o of course.obstacles) {
+    const d = (o.wx - cam.x) ** 2 + (o.wz - cam.z) ** 2;
+    if (d < 45 * 45) for (const p of o.prims) all.push([d, p, o]);
+  }
+  all.sort((a, b) => a[0] - b[0]);
+  nBox = 0; nCyl = 0;
+  for (const [, p, o] of all) {
+    if (p.cyl) {
+      if (nCyl >= NC) continue;
+      cylA.set([p.x, p.z, p.r, p.kind], nCyl * 4); cylB.set([p.y0, p.y1, p.bump ? o.flash : 0, 0], nCyl * 4); nCyl++;
+    } else {
+      if (nBox >= NB) continue;
+      boxA.set([p.x, p.y, p.z, p.yaw], nBox * 4); boxB.set([p.hx, p.hy, p.hz, p.kind], nBox * 4); nBox++;
+    }
+  }
+}
+// half-resolution fog targets: (scattered light, transmittance) and (hit distance, wisp transmittance)
+const fogRT = { w: 0, h: 0, fb: null, tex: null, aux: null };
+const FOG_SCALE = parseFloat(QS.get('fs')) || 0.5;
+let fogSteps = parseInt(QS.get('steps'), 10) || 64, fogMax = 64;
+function fogTarget() {
+  const fs = settings.fogQ === 'low' ? Math.min(FOG_SCALE, 0.35) : FOG_SCALE;
+  const w = Math.max(1, Math.round(canvas.width * fs)), h = Math.max(1, Math.round(canvas.height * fs));
+  if (fogRT.w === w && fogRT.h === h) return fogRT;
+  if (fogRT.fb) { gl.deleteFramebuffer(fogRT.fb); gl.deleteTexture(fogRT.tex); gl.deleteTexture(fogRT.aux); }
+  const mk = () => {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, w, h);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  };
+  fogRT.tex = mk(); fogRT.aux = mk();
+  fogRT.fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fogRT.fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fogRT.tex, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, fogRT.aux, 0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  fogRT.w = w; fogRT.h = h;
+  return fogRT;
+}
+const fogMarbU = new Float32Array(16), noWisps = new Float32Array(9);
+// per-frame values shared by both passes
+function frameState(winMin) {
+  marbles.forEach((m, i) => {
+    const vis = !m.hidden && !(m.inv > 0 && Math.floor(m.inv * 12) % 2 === 1);
+    marbU.set([m.x, m.y, m.z, vis ? 1 : 0], i * 4);
+  });
+  gatherObstacles();
+  // the four marbles nearest the camera cast shadow beams through the fog
+  fogMarbU.fill(0);
+  marbles.filter((m) => !m.hidden).map((m) => [(m.x - cam.x) ** 2 + (m.z - cam.z) ** 2, m]).sort((a, b) => a[0] - b[0])
+    .slice(0, 4).forEach(([, m], k) => fogMarbU.set([m.x, m.y, m.z, 1], k * 4));
+  return { winMin, b: camBasis(), jit: (frame * 0.618) % 1 };
+}
+function setUniforms(p, F, w, h) {
+  const C = course, th = C.theme, b = F.b;
+  bindTex(p, 'uMap', 0, stateCur.t);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_3D, noiseTex);
+  gl.uniform1i(U(p, 'uNoise'), 1);
+  bindTex(p, 'uGrid', 2, gridTex);
+  bindTex(p, 'uBlk', 3, blkTex);
+  bindTex(p, 'uFogRef', 4, fogRefTex);
+  gl.uniform2f(U(p, 'uGO'), C.ox, C.oz);
+  gl.uniform2i(U(p, 'uGN'), C.gw, C.gh);
+  gl.uniform2i(U(p, 'uBN'), C.bw, C.bh);
+  gl.uniform1f(U(p, 'uYMax'), C.yMax + 0.05);
+  gl.uniform1f(U(p, 'uYMin'), C.yMin);
+  gl.uniform2f(U(p, 'uRes'), w, h);
+  gl.uniform3fv(U(p, 'uCamPos'), b.pos);
+  gl.uniform3fv(U(p, 'uCamF'), b.f);
+  gl.uniform3fv(U(p, 'uCamR'), b.r);
+  gl.uniform3fv(U(p, 'uCamU'), b.u);
+  gl.uniform1f(U(p, 'uTanH'), tanHalf());
+  gl.uniform1f(U(p, 'uTime'), simTime);
+  gl.uniform1f(U(p, 'uJit'), F.jit);
+  gl.uniform1f(U(p, 'uExposure'), th.exposure * settings.bright / 100);
+  gl.uniform1i(U(p, 'uSunShadow'), setOn('shadows') ? 1 : 0);
+  gl.uniform4fv(U(p, 'uMarb'), marbU);
+  gl.uniform3fv(U(p, 'uMarbF0'), marbF0);
+  gl.uniform4fv(U(p, 'uBoxA'), boxA); gl.uniform4fv(U(p, 'uBoxB'), boxB);
+  gl.uniform4fv(U(p, 'uCylA'), cylA); gl.uniform4fv(U(p, 'uCylB'), cylB);
+  gl.uniform1i(U(p, 'uNB'), nBox); gl.uniform1i(U(p, 'uNC'), nCyl);
+  const sd = th.sunDir, sl = Math.hypot(...sd);
+  gl.uniform3f(U(p, 'uSunDir'), sd[0] / sl, sd[1] / sl, sd[2] / sl);
+  for (const [u, k] of [['uSunCol', 'sun'], ['uAmb', 'amb'], ['uSkyTop', 'skyTop'], ['uSkyHor', 'skyHor'], ['uAbyss', 'abyss'],
+    ['uTileA', 'tileA'], ['uTileB', 'tileB'], ['uWall', 'wall'], ['uAccent', 'accent'], ['uRail', 'rail']]) gl.uniform3fv(U(p, u), th[k]);
+  gl.uniform1f(U(p, 'uNeon'), th.grid ? 1 : 0);
+  const fogOn = !!C.def.fog;
+  gl.uniform1i(U(p, 'uFogOn'), fogOn ? 1 : 0);
+  gl.uniform1i(U(p, 'uShowMap'), params.showMap ? 1 : 0);
+  gl.uniform2f(U(p, 'uAirShift'), airShift[0], airShift[1]);
+  gl.uniform2f(U(p, 'uWinMin'), F.winMin[0], F.winMin[1]);
+  gl.uniform2f(U(p, 'uWindDir'), windDir[0], windDir[1]);
+  if (fogOn) {
+    gl.uniform2f(U(p, 'uFRO'), C.ox, C.oz);
+    gl.uniform2f(U(p, 'uFRS'), C.fogRef.size[0], C.fogRef.size[1]);
+    const ref = fogRefAt(cam.x, cam.z);
+    gl.uniform1f(U(p, 'uFogHi'), ref + params.height * 2 + 7);
+    gl.uniform1f(U(p, 'uFogLo'), ref - 14);
+    gl.uniform3fv(U(p, 'uFogSun'), th.fogSun || th.sun);
+    gl.uniform3fv(U(p, 'uFogSky'), th.fogSky || th.amb);
+    gl.uniform4fv(U(p, 'uFogMarb'), fogMarbU);
+    gl.uniform1i(U(p, 'uFogSteps'), fogSteps);
+  }
+  gl.uniform1f(U(p, 'uHeight'), params.height);
+  gl.uniform1f(U(p, 'uSigma'), params.thickness);
+  gl.uniform3fv(U(p, 'uWispPos'), wispPos);
+  gl.uniform3fv(U(p, 'uWispCol'), fogOn ? wispCol : noWisps);
+}
+function render(winMin) {
+  const F = frameState(winMin);
+  const fogPass = !!course.def.fog && !params.showMap;
+  if (fogPass) {
+    const gq = QS.has('split') ? gpuBegin('fogpass') : null;
+    const R = fogTarget(), p = PR.fog;
+    gl.useProgram(p.p);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, R.fb);
+    gl.viewport(0, 0, R.w, R.h);
+    setUniforms(p, F, R.w, R.h);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gpuEnd(gq);
+  }
+  const gm = QS.has('split') ? gpuBegin('main') : null;
+  const p = PR.render;
+  gl.useProgram(p.p);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  setUniforms(p, F, canvas.width, canvas.height);
+  if (fogPass) {
+    bindTex(p, 'uFogTex', 5, fogRT.tex);
+    bindTex(p, 'uFogAux', 6, fogRT.aux);
+    gl.uniform2f(U(p, 'uFogRes'), fogRT.w, fogRT.h);
+  } else {
+    // samplers must still point at valid, non-feedback textures
+    bindTex(p, 'uFogTex', 5, dummyTex);
+    bindTex(p, 'uFogAux', 6, dummyTex);
+  }
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gpuEnd(gm);
+}
+
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
+let last = performance.now(), statT = 0, fpsFrames = 0;
+const statsEl = $('stats');
+let lastRaf = 0, lastDraw = 0;
+function tick(now) {
+  requestAnimationFrame(tick);
+  trackRefresh(now - lastRaf);
+  lastRaf = now;
+  // optional 60 fps cap on faster screens: draw on a steady 60 Hz schedule, skip the frames in between
+  if (settings.fps === '60' && gov.hz > 70) {
+    if (now < lastDraw - 2) return;
+    lastDraw = Math.max(lastDraw + 1000 / 60, now - 1000 / 60);
+  } else lastDraw = now;
+  const c0 = performance.now();
+  tickBody(now);
+  perf.frames++; perf.cpu += performance.now() - c0;
+}
+function tickBody(now) {
+  const rawDt = Math.min(Math.max((now - last) / 1000, 0), 0.25);
+  last = now;
+  const dt = Math.min(rawDt, 0.1) * SIM_SPEED;
+
+  if (progState === 'compiling') pollPrograms();
+  if (progState !== 'ready' || !noiseTex || !course || state === 'loading') return;
+  pollPad(rawDt);
+  statusEl.classList.add('gone');
+
+  if (!paused) {
+    if (state === 'countdown') {
+      const before = Math.ceil(countdown);
+      countdown -= dt;
+      const after = Math.ceil(countdown);
+      if (after !== before || bannerTimer <= 0) flash(after > 0 ? String(after) : 'GO!', after > 0 ? 1.2 : 0.9);
+      if (after !== before) play(after > 0 ? 'beep' : 'go');
+      if (countdown <= 0) { state = 'racing'; raceTime = 0; }
+    } else if (state === 'racing' || state === 'finished') raceTime += dt;
+    if (state === 'finished' && !resultsShown) {
+      resultsTimer -= dt;
+      if (resultsTimer <= 0) { resultsShown = true; fillResults(); results.hidden = false; }
+    }
+    timed('physics', () => stepPhysics(dt));
+    simTime += dt;
+    airShift[0] += windDir[0] * params.wind * dt;
+    airShift[1] += windDir[1] * params.wind * dt;
+    updateCamera(dt);
+    if (course.def.fog) updateWisps(dt);
+  }
+
+  const winMin = [cam.x - WIN / 2 - airShift[0], cam.z - WIN / 2 - airShift[1]];
+  gpuPoll();
+  const gq = QS.has('split') ? null : gpuBegin();
+  if (course.def.fog && !QS.has('nosim')) {
+    // the fog moves slowly: step it at a fixed 60 Hz, whatever the display rate
+    if (!prevWinMin) { prevWinMin = winMin; simAcc = SIM_DT; }
+    if (!paused) simAcc = Math.min(simAcc + dt, SIM_DT * 2);
+    if (simAcc >= SIM_DT) {
+      simAcc -= SIM_DT;
+      const gs = QS.has('split') ? gpuBegin('sim') : null;
+      timed('fogsim', () => simulate(paused ? 0 : SIM_DT, winMin));
+      gpuEnd(gs);
+      prevWinMin = winMin;
+    }
+  }
+  timed('render', () => render(prevWinMin || winMin));
+  gpuEnd(gq);
+  frame++;
+  timed('hud', () => updateHud(dt));
+  timed('labels', () => updateLabels());
+  timed('minimap', () => drawMinimap());
+  audioFrame();
+
+  governor(rawDt * 1000, now);
+  statT += rawDt; fpsFrames++;
+  if (statT > 0.5) {
+    const g = perf.gpuEma ? ` · GPU ${perf.gpuEma.toFixed(1)} ms` : '';
+    statsEl.textContent = `${canvas.width}×${canvas.height} · ${Math.round(fpsFrames / statT)} fps of ${gov.hz} Hz${g}`;
+    statT = 0; fpsFrames = 0;
+  }
+}
+window.__mm = { marbles, catalog, perf, gov, audio, settings, setSpeed: (v) => { SIM_SPEED = v; }, get state() { return state; }, get course() { return course; }, get raceTime() { return raceTime; },
+  start: (i) => { selectCourse(i); startRace(); },
+  fastRace(i, maxT = 300, keep = false, opts = {}) {
+    const d0 = difficulty, m0 = mode;
+    if (opts.difficulty !== undefined) difficulty = opts.difficulty;
+    if (opts.mode) mode = opts.mode;
+    testAuto = true;
+    selectCourse(i); startRace();
+    if (opts.playerSkill) player.ai.skill = opts.playerSkill;
+    difficulty = d0;
+    state = 'racing'; countdown = 0; raceTime = 0;
+    const h = 1 / 60;
+    for (let t = 0; t < maxT && finishOrder.length < NM; t += h) { stepPhysics(h); raceTime += h; }
+    testAuto = false;
+    const out = marbles.map((m) => ({ name: m.name, t: m.finished ? +m.finishTime.toFixed(1) : null, falls: m.falls, prog: Math.round(m.prog), skill: m.ai.skill }));
+    mode = m0;
+    if (!keep) showMenu();
+    return { name: course.def.name, L: Math.round(course.L), out };
+  } };
+applySettings();
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

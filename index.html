@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Marble Mist: a downhill marble racer you play in your browser</title>
+<meta name="description" content="Race ten marbles down 44 floating obstacle courses: ramps, spinners, stompers, spiral pits and fog you can push. Race it yourself or bet on a marble. Free, no install, works with controllers.">
+<link rel="canonical" href="https://nearbycoder.github.io/marble-mist/">
+<link rel="icon" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta name="theme-color" content="#070910">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Marble Mist">
+<meta property="og:title" content="Marble Mist: race ten marbles down floating obstacle courses">
+<meta property="og:description" content="44 courses of ramps, spinners, stompers, spiral pits and pushable fog. Race it or bet on it. Free in your browser.">
+<meta property="og:url" content="https://nearbycoder.github.io/marble-mist/">
+<meta property="og:image" content="https://nearbycoder.github.io/marble-mist/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Marble Mist">
+<meta name="twitter:description" content="Race ten marbles down floating obstacle courses, free in your browser.">
+<meta name="twitter:image" content="https://nearbycoder.github.io/marble-mist/assets/og.jpg">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Marble Mist","url":"https://nearbycoder.github.io/marble-mist/",
+ "description":"A downhill marble racing game played in the browser: 44 floating obstacle courses, ten AI rivals, race and bet modes.",
+ "genre":["Racing","Arcade"],"gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any (WebGL2 browser)",
+ "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"image":"https://nearbycoder.github.io/marble-mist/assets/og.jpg"}
+</script>
+<style>
+  :root {
+    --bg: #070910; --bg2: #0c1020; --card: rgba(255, 255, 255, .045); --line: rgba(170, 190, 230, .14);
+    --ink: #e8ecf5; --dim: rgba(232, 236, 245, .66); --faint: rgba(232, 236, 245, .42);
+    --accent: #ffb347; --accent2: #ff8a3d; --blue: #9db8ff;
+    --radius: 18px; --max: 1180px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  img, video { display: block; max-width: 100%; }
+  a { color: inherit; }
+  .wrap { width: min(var(--max), 100% - 40px); margin: 0 auto; }
+  .eyebrow { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  h1, h2, h3 { line-height: 1.12; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: clamp(30px, 4.2vw, 48px); font-weight: 800; }
+  h3 { font-size: 19px; font-weight: 700; }
+  p { margin: 0; }
+  .lead { font-size: clamp(17px, 1.6vw, 20px); color: var(--dim); max-width: 640px; }
+  section { padding: clamp(72px, 10vw, 128px) 0; position: relative; }
+  .head { display: grid; gap: 14px; margin-bottom: 44px; }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 12px; font-weight: 750;
+    letter-spacing: .04em; text-decoration: none; font-size: 15px; transition: transform .15s, filter .15s, background .15s; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary { background: linear-gradient(180deg, #ffd27a, #ff9d3d); color: #1a0f02; box-shadow: 0 10px 30px rgba(255, 140, 50, .28); }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.ghost { background: rgba(255, 255, 255, .07); border: 1px solid var(--line); color: var(--ink); }
+  .btn.ghost:hover { background: rgba(255, 255, 255, .12); }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+
+  /* nav */
+  .nav { position: fixed; inset: 0 0 auto; z-index: 20; transition: background .25s, border-color .25s; border-bottom: 1px solid transparent; }
+  .nav.solid { background: rgba(7, 9, 16, .82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: var(--line); }
+  .nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; letter-spacing: .12em; font-size: 15px; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .brand span { color: var(--accent); }
+  .nav ul { display: flex; gap: 22px; list-style: none; margin: 0 0 0 auto; padding: 0; }
+  .nav ul a { text-decoration: none; color: var(--dim); font-size: 14px; font-weight: 550; }
+  .nav ul a:hover { color: var(--ink); }
+  .nav .btn { padding: 9px 16px; font-size: 13px; }
+
+  /* hero */
+  .hero { min-height: 100svh; display: grid; align-items: end; padding: 120px 0 72px; overflow: hidden; }
+  .hero video, .hero .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+  .hero::after { content: ""; position: absolute; inset: 0; z-index: -1;
+    background: linear-gradient(180deg, rgba(7, 9, 16, .75) 0, rgba(7, 9, 16, 0) 150px),
+      linear-gradient(90deg, rgba(7, 9, 16, .9) 0%, rgba(7, 9, 16, .6) 45%, rgba(7, 9, 16, .1) 80%),
+      linear-gradient(0deg, var(--bg) 0%, rgba(7, 9, 16, 0) 35%); }
+  .hero .wrap { display: grid; gap: 22px; max-width: var(--max); }
+  .title { font-size: clamp(44px, 8vw, 96px); font-weight: 850; letter-spacing: .1em; line-height: .95; }
+  .title span { color: var(--accent); }
+  .tag { font-size: clamp(24px, 3vw, 36px); font-weight: 750; max-width: 680px; line-height: 1.15; }
+  .hero .lead { max-width: 560px; }
+  .ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .chip { padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, .07); border: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .vidctl { position: absolute; right: 20px; bottom: 24px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line);
+    background: rgba(7, 9, 16, .6); color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+  .vidctl svg { width: 16px; height: 16px; }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line);
+    border-radius: var(--radius); overflow: hidden; margin-top: -8px; }
+  .stat { background: var(--bg2); padding: 26px 24px; }
+  .stat b { display: block; font-size: clamp(30px, 3.6vw, 44px); font-weight: 850; letter-spacing: -.02em;
+    background: linear-gradient(180deg, #fff, #ffd9a8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat span { color: var(--dim); font-size: 14px; }
+
+  /* features */
+  .features { display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px; }
+  .feat { grid-column: span 4; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+    display: flex; flex-direction: column; }
+  .feat.wide { grid-column: span 6; }
+  .feat figure { margin: 0; aspect-ratio: 16 / 10; overflow: hidden; background: #0d1222; }
+  .feat figure img, .feat figure video { width: 100%; height: 100%; object-fit: cover; transition: transform .6s; }
+  .feat:hover figure img, .feat:hover figure video { transform: scale(1.04); }
+  .feat .txt { padding: 20px 22px 24px; display: grid; gap: 8px; }
+  .feat p { color: var(--dim); font-size: 15px; }
+  .icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 4px;
+    background: rgba(255, 179, 71, .12); color: var(--accent); }
+  .icon svg { width: 22px; height: 22px; }
+  .feat.small { grid-column: span 3; }
+  .feat.small .txt { padding: 22px; }
+
+  /* courses */
+  .courses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .course { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0d1222; cursor: zoom-in;
+    padding: 0; color: inherit; font: inherit; text-align: left; }
+  .course img { width: 100%; height: auto; aspect-ratio: 16 / 11; object-fit: cover; transition: transform .6s; }
+  .course:hover img { transform: scale(1.05); }
+  .course .cap { position: absolute; inset: auto 0 0; padding: 40px 14px 12px; background: linear-gradient(0deg, rgba(7, 9, 16, .92), rgba(7, 9, 16, 0));
+    display: grid; gap: 2px; }
+  .course b { font-size: 15px; }
+  .course small { color: var(--dim); font-size: 12.5px; line-height: 1.35; }
+  .dots { color: var(--accent); letter-spacing: 2px; font-size: 11px; }
+  .dots s { color: rgba(255, 255, 255, .22); text-decoration: none; }
+  .more { margin-top: 22px; color: var(--dim); }
+
+  /* modes */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .mode { background: var(--card); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
+  .mode img { width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
+  .mode .txt { padding: 26px 28px 30px; display: grid; gap: 12px; }
+  .mode ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 9px; color: var(--dim); }
+  .mode li { padding-left: 26px; position: relative; }
+  .mode li::before { content: ""; position: absolute; left: 0; top: .5em; width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff6e0, #ffb347 45%, #a8481a); }
+
+  /* tech */
+  .tech { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .tcard { border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; background: linear-gradient(180deg, rgba(157, 184, 255, .06), rgba(157, 184, 255, 0)); display: grid; gap: 10px; align-content: start; }
+  .tcard p { color: var(--dim); font-size: 14.5px; }
+  .tcard code { font-size: 13px; color: var(--blue); }
+
+  /* controls */
+  .ctrl { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .ctrl th, .ctrl td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 15px; vertical-align: top; }
+  .ctrl th { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); background: rgba(255, 255, 255, .03); }
+  .ctrl td:first-child { color: var(--dim); width: 26%; }
+  .ctrl tr:last-child td { border-bottom: 0; }
+  kbd { font: 600 12.5px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 6px; border: 1px solid var(--line); background: rgba(255, 255, 255, .06); }
+
+  /* faq */
+  .faq { display: grid; gap: 10px; max-width: 860px; }
+  details { border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 0 20px; }
+  summary { cursor: pointer; list-style: none; padding: 18px 0; font-weight: 650; display: flex; justify-content: space-between; gap: 16px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--accent); font-size: 22px; line-height: 1; transition: transform .2s; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { color: var(--dim); padding: 0 0 18px; }
+
+  /* final cta */
+  .final { text-align: center; overflow: hidden; }
+  .final::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .35;
+    background: url(media/course-maelstrom.webp) center/cover; mask-image: radial-gradient(ellipse at center, #000 0%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, transparent 70%); }
+  .final .wrap { display: grid; gap: 18px; justify-items: center; }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--faint); font-size: 14px; }
+  footer .wrap { display: flex; gap: 18px; justify-content: space-between; flex-wrap: wrap; align-items: center; }
+  footer a { color: var(--dim); }
+
+  /* lightbox */
+  dialog { border: 0; padding: 0; background: transparent; max-width: min(1400px, 94vw); }
+  dialog::backdrop { background: rgba(4, 6, 12, .86); backdrop-filter: blur(4px); }
+  dialog img { border-radius: 14px; max-height: 86vh; width: auto; }
+  dialog p { color: var(--ink); text-align: center; margin-top: 12px; font-weight: 650; }
+  dialog button { position: fixed; top: 18px; right: 18px; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line);
+    background: rgba(7, 9, 16, .7); color: var(--ink); font-size: 22px; cursor: pointer; }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 1000px) {
+    .feat, .feat.wide { grid-column: span 6; }
+    .feat.small { grid-column: span 6; }
+    .courses { grid-template-columns: repeat(2, 1fr); }
+    .tech { grid-template-columns: 1fr 1fr; }
+    .nav ul { display: none; }
+    .nav .btn { margin-left: auto; }
+  }
+  @media (max-width: 700px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    .feat, .feat.wide, .feat.small { grid-column: span 12; }
+    .modes { grid-template-columns: 1fr; }
+    .tech { grid-template-columns: 1fr; }
+    .hero { padding-bottom: 48px; }
+    .hero::after { background: linear-gradient(0deg, rgba(7, 9, 16, .96) 10%, rgba(7, 9, 16, .55) 60%, rgba(7, 9, 16, .35) 100%); }
+    .ctrl th:nth-child(3), .ctrl td:nth-child(3) { display: none; }
+    .ctrl .pad-row td { display: table-cell; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .feat figure img, .course img, .btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="30" height="30">MARBLE <span>MIST</span></a>
+    <ul>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#courses">Courses</a></li>
+      <li><a href="#modes">Modes</a></li>
+      <li><a href="#controls">Controls</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/nearbycoder/marble-mist">GitHub</a></li>
+    </ul>
+    <a class="btn primary" href="play/">Play now</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <video id="heroVideo" autoplay muted loop playsinline preload="metadata" poster="media/hero-poster.jpg" aria-hidden="true">
+    <source src="media/hero-480.mp4" type="video/mp4" media="(max-width: 700px)">
+    <source src="media/hero-720.mp4" type="video/mp4">
+  </video>
+  <div class="wrap">
+    <div class="eyebrow">Free browser game · no install</div>
+    <h1 class="title">MARBLE <span>MIST</span></h1>
+    <p class="tag">Roll fast. Hit nothing. Don't fall off.</p>
+    <p class="lead">A downhill marble racer for the browser. Ten rival marbles, 44 floating obstacle courses, and nothing but air past the edges.</p>
+    <div class="ctas">
+      <a class="btn primary" href="play/">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+        Play free in your browser</a>
+      <a class="btn ghost" href="https://github.com/nearbycoder/marble-mist">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        Source on GitHub</a>
+    </div>
+    <div class="chips"><span class="chip">Keyboard, mouse &amp; touch</span><span class="chip">Gamepad support</span><span class="chip">Up to 120 fps</span><span class="chip">Open source (MIT)</span></div>
+  </div>
+  <button class="vidctl" id="vidctl" aria-label="Pause the background video">
+    <svg id="vidIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+  </button>
+</header>
+
+<main>
+  <div class="wrap reveal">
+    <div class="stats" role="list">
+      <div class="stat" role="listitem"><b>44</b><span>courses across four difficulty levels</span></div>
+      <div class="stat" role="listitem"><b>11</b><span>marbles in every race</span></div>
+      <div class="stat" role="listitem"><b>13</b><span>looks, from daylight to neon and lava</span></div>
+      <div class="stat" role="listitem"><b>0</b><span>downloads, installs or sign-ups</span></div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="eyebrow">What's in it</div>
+        <h2>Every course wants you off it.</h2>
+        <p class="lead">Floating courses built from raised tiles, with drops you can roll off at any time. Some have rails and most don't. Get to the bottom before the other ten marbles do.</p>
+      </div>
+      <div class="features">
+        <article class="feat wide reveal">
+          <figure><img src="media/course-neon-alley.webp" alt="Marbles weaving between stompers and sliding pushers on a neon course" loading="lazy" width="1600" height="1000"></figure>
+          <div class="txt"><h3>Obstacles with timing to learn</h3><p>Pinball bumpers, spinning sweepers, sliding pushers that shove you off the edge, and stompers that flatten anything underneath. Add ice, boost pads and two-wide catwalks over the drop.</p></div>
+        </article>
+        <article class="feat wide reveal">
+          <figure><img src="media/course-maelstrom.webp" alt="A three-lap spiral pit with the finish line at the bottom" loading="lazy" width="1600" height="1000"></figure>
+          <div class="txt"><h3>Circular levels with real depth</h3><p>Banked hairpins, funnel bowls that drain into an exit channel, round platforms swept by giant spinners, and spiral pits that wind two or three laps down to a finish at the bottom.</p></div>
+        </article>
+        <article class="feat reveal">
+          <figure><img src="media/course-mistfall.webp" alt="Marbles on a catwalk above a sea of fog" loading="lazy" width="1600" height="1000"></figure>
+          <div class="txt"><h3>Fog you can push</h3><p>On the foggy courses the mist is a live fluid simulation. Every marble clears a path through it, swirls it in its wake, and the wind slowly fills it back in.</p></div>
+        </article>
+        <article class="feat reveal">
+          <figure><img src="media/mode-bet.webp" alt="The bet screen with odds for each marble" loading="lazy" width="1440" height="900"></figure>
+          <div class="txt"><h3>Race it, or bet on it</h3><p>Steer the chrome marble yourself, or sit back, pick a marble and stake your coins. The odds come from how the marbles actually perform in simulated races.</p></div>
+        </article>
+        <article class="feat reveal">
+          <figure><img src="media/ui-settings.webp" alt="The settings screen" loading="lazy" width="1440" height="900"></figure>
+          <div class="txt"><h3>Tuned to your machine</h3><p>The game finds your screen's refresh rate and renders as sharply as it can while holding it: native resolution on a fast GPU, lighter settings on a laptop. Or set it yourself.</p></div>
+        </article>
+        <article class="feat small reveal">
+          <div class="txt"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.94 6.6a2.5 2.5 0 0 0 4.36 1.98L8 15h8l1.84 2.01a2.5 2.5 0 0 0 4.36-1.98l-.94-6.6A4 4 0 0 0 17.3 5Z"/></svg></div>
+            <h3>Controller ready</h3><p>Plug in an Xbox, PlayStation or Switch Pro pad. Analog steering, full menu navigation and rumble when you fall.</p></div>
+        </article>
+        <article class="feat small reveal">
+          <div class="txt"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+            <h3>Sound made live</h3><p>Rolling, glassy clacks, bumper boings and music that changes key with each course, all generated as you play.</p></div>
+        </article>
+        <article class="feat small reveal">
+          <div class="txt"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+            <h3>Quick to play</h3><p>Races run from about half a minute to two. Fall off and you're back at the last checkpoint in a second.</p></div>
+        </article>
+        <article class="feat small reveal">
+          <div class="txt"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+            <h3>Rivals that push back</h3><p>Choose Easy, Normal or Hard. The AI picks lanes, times its run under stompers and learns from whatever knocks it off.</p></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="courses">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="eyebrow">44 courses</div>
+        <h2>From friendly slopes to the Final Exam.</h2>
+        <p class="lead">Seven courses are hand-built. The other 37 are laid out by a course generator, each with its own theme, difficulty and mix of obstacles, and each the same every time you play it.</p>
+      </div>
+      <div class="courses" id="courseGrid"></div>
+      <p class="more reveal">Plus Glacier Glide, Hammer Hall, Funnel Falls, Spiral Mine, The Pinwheel, Halo, The Drain and 28 more.</p>
+    </div>
+  </section>
+
+  <section id="modes">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="eyebrow">Two ways to play</div>
+        <h2>Drive the chrome marble, or back a winner.</h2>
+      </div>
+      <div class="modes">
+        <article class="mode reveal">
+          <img src="media/mode-race.webp" alt="A race in progress with the standings and minimap" loading="lazy" width="1440" height="900">
+          <div class="txt">
+            <h3>Race mode</h3>
+            <p class="lead" style="font-size:16px">You steer the chrome marble against ten AI rivals.</p>
+            <ul>
+              <li>Drag away from your marble to roll that way, or steer with WASD or a gamepad stick</li>
+              <li>Live standings, a minimap, and a fall counter</li>
+              <li>Three rival difficulties, with leaders that won't wait for you</li>
+            </ul>
+          </div>
+        </article>
+        <article class="mode reveal">
+          <img src="media/mode-bet.webp" alt="Placing a bet on a marble before the race" loading="lazy" width="1440" height="900">
+          <div class="txt">
+            <h3>Bet mode</h3>
+            <p class="lead" style="font-size:16px">Eleven AI marbles race, and you put your coins on one.</p>
+            <ul>
+              <li>Bet to win, or on a top-three finish at shorter odds</li>
+              <li>Each marble's form shows how good it is, and the payouts follow</li>
+              <li>Follow your pick, or switch the camera to anyone in the field</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="tech">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="eyebrow">Under the hood</div>
+        <h2>One HTML file. No assets. All of it in the browser.</h2>
+        <p class="lead">The whole game, with its renderer, physics, AI, audio and 44 courses, is a single page you can read with view-source.</p>
+      </div>
+      <div class="tech">
+        <div class="tcard reveal"><h3>Ray traced</h3><p>Every pixel is traced through a grid of course tiles in one WebGL2 shader, with sun shadows, chrome reflections and analytic obstacles. No meshes.</p></div>
+        <div class="tcard reveal"><h3>Real fluid fog</h3><p>The mist is a stable-fluids simulation with vorticity, advected by wind and pushed by every marble, then ray-marched with light scattering.</p></div>
+        <div class="tcard reveal"><h3>Synthesised sound</h3><p>Every effect and the music come from Web Audio oscillators and noise. There are no audio files at all.</p></div>
+        <div class="tcard reveal"><h3>Built to hold 120 fps</h3><p>A frame-rate governor reads the GPU's frame time and adjusts resolution and fog detail to stay inside your screen's refresh budget.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="controls">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="eyebrow">Controls</div>
+        <h2>Pick up and roll.</h2>
+      </div>
+      <table class="ctrl reveal">
+        <thead><tr><th scope="col">Action</th><th scope="col">Keyboard, mouse &amp; touch</th><th scope="col">Controller</th></tr></thead>
+        <tbody>
+          <tr><td>Roll</td><td>Drag away from your marble (further is faster), or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrows</td><td>Left stick or D-pad</td></tr>
+          <tr><td>Zoom</td><td>Scroll wheel</td><td>Right stick</td></tr>
+          <tr><td>Pause</td><td><kbd>Esc</kbd> or <kbd>P</kbd></td><td>Start</td></tr>
+          <tr><td>Watch another marble</td><td><kbd>Tab</kbd>, or click the standings (bet mode)</td><td>LB / RB</td></tr>
+          <tr><td>Menus</td><td>Mouse, <kbd>Tab</kbd> and <kbd>Enter</kbd></td><td>D-pad, A to select, B to go back</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="eyebrow">FAQ</div>
+        <h2>Questions, answered.</h2>
+      </div>
+      <div class="faq reveal">
+        <details><summary>Is it free?</summary><p>Yes. Marble Mist is free to play with no ads, accounts or purchases, and the source code is MIT-licensed on GitHub.</p></details>
+        <details><summary>Do I need to install anything?</summary><p>No. Press Play and it runs in the tab. It needs a browser with WebGL2, which every current version of Chrome, Edge, Firefox and Safari has.</p></details>
+        <details><summary>Does it work on phones and tablets?</summary><p>Yes. Drag on the screen to steer. It's at its best on a laptop or desktop, especially the foggy courses, and the game lowers its resolution to stay smooth on smaller devices.</p></details>
+        <details><summary>Can I play with a controller?</summary><p>Any controller your browser recognises as a standard gamepad works, including Xbox, PlayStation and Switch Pro. Steering is analog, menus are fully navigable, and supported browsers add rumble.</p></details>
+        <details><summary>Why is there no sound?</summary><p>Browsers only allow sound after you interact with the page, so click or press a key once. Volumes for music, effects and menu sounds are under Settings.</p></details>
+        <details><summary>Does it save my progress?</summary><p>Your settings and bet-mode coins are saved in your browser on this device. There are no accounts, so nothing leaves your machine.</p></details>
+        <details><summary>It's slow on my computer. What can I change?</summary><p>Open Settings, then Video. Set the resolution to 50% or 35%, turn sun shadows off, and set fog quality to Low. The Auto setting already lowers resolution on slower machines.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap reveal">
+      <div class="eyebrow">Ready?</div>
+      <h2>Ten marbles are already at the top.</h2>
+      <p class="lead">One click to play. No sign-up, no download.</p>
+      <div class="ctas"><a class="btn primary" href="play/">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+        Play Marble Mist</a></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="26" height="26">MARBLE <span>MIST</span></a>
+    <span>Made by <a href="https://github.com/nearbycoder">nearbycoder</a> · <a href="https://github.com/nearbycoder/marble-mist">Source on GitHub</a> · MIT license</span>
+  </div>
+</footer>
+
+<dialog id="lightbox" aria-label="Course screenshot">
+  <button id="lbClose" aria-label="Close">×</button>
+  <img id="lbImg" alt="">
+  <p id="lbCap"></p>
+</dialog>
+
+<script>
+(() => {
+  const COURSES = [
+    ['course-sunny-steps', 'Sunny Steps', 1, 'Wide railed ramps and friendly bumpers. The place to learn braking.'],
+    ['course-pinball-terraces', 'Pinball Terraces', 2, 'Bumper fields on sunset terraces, plus a first spinner.'],
+    ['course-roundabout', 'Roundabout', 2, 'Round platforms swept by giant spinners, linked by banked hairpins.'],
+    ['course-mistfall', 'Mistfall', 3, 'Moonlit catwalks above a sea of fog the marbles push around.'],
+    ['course-maelstrom', 'Maelstrom', 3, 'A funnel bowl, then three laps down a spiral pit.'],
+    ['course-corkscrew', 'Corkscrew', 3, 'Hairpin after banked hairpin into a two-lap pit.'],
+    ['course-magma-core', 'Magma Core', 4, 'Everything at once, half-hidden in drifting smoke.'],
+    ['course-whiteout', 'Whiteout', 4, 'Ice, narrow catwalks and jumps in a snowstorm.'],
+  ];
+  const grid = document.getElementById('courseGrid');
+  grid.innerHTML = COURSES.map(([f, n, l, d]) =>
+    `<button class="course reveal" data-src="media/${f}.webp" data-name="${n}">` +
+    `<img src="media/${f}.webp" alt="${n}: ${d}" loading="lazy" width="1600" height="1000">` +
+    `<span class="cap"><span class="dots">${'●'.repeat(l)}<s>${'●'.repeat(4 - l)}</s></span><b>${n}</b><small>${d}</small></span></button>`).join('');
+
+  // lightbox
+  const lb = document.getElementById('lightbox'), lbImg = document.getElementById('lbImg'), lbCap = document.getElementById('lbCap');
+  grid.addEventListener('click', (e) => {
+    const b = e.target.closest('.course');
+    if (!b || !lb.showModal) return;
+    lbImg.src = b.dataset.src; lbImg.alt = b.dataset.name; lbCap.textContent = b.dataset.name;
+    lb.showModal();
+  });
+  document.getElementById('lbClose').addEventListener('click', () => lb.close());
+  lb.addEventListener('click', (e) => { if (e.target === lb) lb.close(); });
+
+  // nav turns solid once you scroll
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('solid', scrollY > 40);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  // hero video: respect reduced motion, and let people pause it
+  const v = document.getElementById('heroVideo'), btn = document.getElementById('vidctl'), icon = document.getElementById('vidIcon');
+  const PAUSE = '<path d="M7 5h3v14H7zM14 5h3v14h-3z"/>', PLAY = '<path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/>';
+  const sync = () => { icon.innerHTML = v.paused ? PLAY : PAUSE; btn.setAttribute('aria-label', v.paused ? 'Play the background video' : 'Pause the background video'); };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { v.removeAttribute('autoplay'); v.pause(); }
+  btn.addEventListener('click', () => { if (v.paused) v.play(); else v.pause(); });
+  v.addEventListener('play', sync); v.addEventListener('pause', sync); sync();
+
+  // fade sections in as they arrive
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }), { rootMargin: '0px 0px -8% 0px' }) : null;
+  document.querySelectorAll('.reveal').forEach((el) => (io ? io.observe(el) : el.classList.add('in')));
+})();
+</script>
+</body>
+</html>
