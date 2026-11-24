@@ -74,8 +74,12 @@
   .nav .btn { padding: 9px 16px; font-size: 13px; }
 
   /* hero */
-  .hero { min-height: 100svh; display: grid; align-items: end; padding: 120px 0 72px; overflow: hidden; }
-  .hero video, .hero .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+  /* the poster sits behind the videos, so there is never a bare black frame while one loads or restarts */
+  .hero { min-height: 100svh; display: grid; align-items: end; padding: 120px 0 72px; overflow: hidden;
+    background: var(--bg) url(media/hero-poster.jpg) center / cover no-repeat; }
+  .hero video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2;
+    opacity: 0; transition: opacity .7s linear; }
+  .hero video.on { opacity: 1; }
   .hero::after { content: ""; position: absolute; inset: 0; z-index: -1;
     background: linear-gradient(180deg, rgba(7, 9, 16, .75) 0, rgba(7, 9, 16, 0) 150px),
       linear-gradient(90deg, rgba(7, 9, 16, .9) 0%, rgba(7, 9, 16, .6) 45%, rgba(7, 9, 16, .1) 80%),
@@ -228,10 +232,9 @@
 </nav>
 
 <header class="hero" id="top">
-  <video id="heroVideo" autoplay muted loop playsinline preload="metadata" poster="media/hero-poster.jpg" aria-hidden="true">
-    <source src="media/hero-480.mp4" type="video/mp4" media="(max-width: 700px)">
-    <source src="media/hero-720.mp4" type="video/mp4">
-  </video>
+  <!-- two copies of the reel take turns and crossfade at the loop point, so the decoder never restarts on screen -->
+  <video class="hv" muted playsinline preload="auto" aria-hidden="true"></video>
+  <video class="hv" muted playsinline preload="auto" aria-hidden="true"></video>
   <div class="wrap">
     <div class="eyebrow">Free browser game · no install</div>
     <h1 class="title">MARBLE <span>MIST</span></h1>
@@ -469,13 +472,42 @@
   const onScroll = () => nav.classList.toggle('solid', scrollY > 40);
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
-  // hero video: respect reduced motion, and let people pause it
-  const v = document.getElementById('heroVideo'), btn = document.getElementById('vidctl'), icon = document.getElementById('vidIcon');
+  // hero video: two copies take turns; the next one starts from the top and fades in just before the current one ends
+  const vids = [...document.querySelectorAll('.hero video.hv')], btn = document.getElementById('vidctl'), icon = document.getElementById('vidIcon');
+  const src = matchMedia('(max-width: 700px)').matches ? 'media/hero-480.mp4' : 'media/hero-720.mp4';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const FADE = 0.7;
+  let cur = 0, userPaused = reduce, swapping = false;
+  vids.forEach((v) => { v.src = src; v.load(); });
+  const play = (v) => { const p = v.play(); if (p && p.catch) p.catch(() => {}); };
   const PAUSE = '<path d="M7 5h3v14H7zM14 5h3v14h-3z"/>', PLAY = '<path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/>';
-  const sync = () => { icon.innerHTML = v.paused ? PLAY : PAUSE; btn.setAttribute('aria-label', v.paused ? 'Play the background video' : 'Pause the background video'); };
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { v.removeAttribute('autoplay'); v.pause(); }
-  btn.addEventListener('click', () => { if (v.paused) v.play(); else v.pause(); });
-  v.addEventListener('play', sync); v.addEventListener('pause', sync); sync();
+  const sync = () => { icon.innerHTML = userPaused ? PLAY : PAUSE; btn.setAttribute('aria-label', userPaused ? 'Play the background video' : 'Pause the background video'); };
+  const first = vids[0];
+  const start = () => { if (!userPaused) { first.classList.add('on'); play(first); } };
+  if (first.readyState >= 2) start(); else first.addEventListener('loadeddata', start, { once: true });
+  function watch() {
+    const a = vids[cur], b = vids[1 - cur];
+    if (!userPaused && !swapping && a.duration && a.duration - a.currentTime < FADE + 0.1 && b.readyState >= 2) {
+      swapping = true;
+      b.currentTime = 0;
+      play(b);
+      b.classList.add('on');                // fades in over the last moments of the current copy
+      setTimeout(() => {
+        a.classList.remove('on'); a.pause(); a.currentTime = 0;
+        cur = 1 - cur; swapping = false;
+      }, FADE * 1000 + 60);
+    }
+    requestAnimationFrame(watch);
+  }
+  requestAnimationFrame(watch);
+  btn.addEventListener('click', () => {
+    userPaused = !userPaused;
+    const v = vids[cur];
+    if (userPaused) vids.forEach((x) => x.pause());
+    else { v.classList.add('on'); play(v); }
+    sync();
+  });
+  sync();
 
   // fade sections in as they arrive
   const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => {

@@ -3471,8 +3471,11 @@ function applySize() {
   else if (!gov.p || gov.wasFixed) gov.p = Math.min(1, 2.4e6 / gov.native);   // a safe start; the governor takes it from here
   gov.wasFixed = !!gov.fixed;
   const s = Math.sqrt(gov.p * gov.native / (w * h));
-  const W = Math.max(1, Math.round(w * s)), H = Math.max(1, Math.round(h * s));
-  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  // only staged here: changing the canvas size clears it, so the change is made right before the next draw
+  gov.W = Math.max(1, Math.round(w * s)); gov.H = Math.max(1, Math.round(h * s));
+}
+function commitSize() {
+  if (gov.W && (canvas.width !== gov.W || canvas.height !== gov.H)) { canvas.width = gov.W; canvas.height = gov.H; }
 }
 addEventListener('resize', applySize);
 applySize();
@@ -3684,6 +3687,7 @@ function setUniforms(p, F, w, h) {
   gl.uniform3fv(U(p, 'uWispCol'), fogOn ? wispCol : noWisps);
 }
 function render(winMin) {
+  commitSize();               // resize (which clears the canvas) and redraw in the same frame, so a blank canvas is never shown
   const F = frameState(winMin);
   const fogPass = !!course.def.fog && !params.showMap;
   if (fogPass) {
